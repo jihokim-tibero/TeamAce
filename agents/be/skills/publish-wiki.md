@@ -34,14 +34,14 @@ API 명세를 프로젝트의 Git Wiki에 발행하고, PR/MR을 생성한다.
 4. 소스 코드 PR/MR 생성 (GitHub):
    ```bash
    git add -A && git commit -m "feat(be): [기능명] - [설명]"
-   git push -u origin feature/[feature-name]-be
+   git push -u origin feature/[feature-name]
    gh pr create --title "feat(be): [기능명]" --body "$(cat pr-description.md)"
    ```
 
 5. 소스 코드 MR 생성 (GitLab):
    ```bash
    git add -A && git commit -m "feat(be): [기능명] - [설명]"
-   git push -u origin feature/[feature-name]-be
+   git push -u origin feature/[feature-name]
    glab mr create --title "feat(be): [기능명]" --description "$(cat pr-description.md)"
    ```
 
@@ -50,7 +50,7 @@ API 명세를 프로젝트의 Git Wiki에 발행하고, PR/MR을 생성한다.
 ## 출력
 - Wiki URL (API 명세)
 - PR/MR URL (소스 코드)
-- 완료 신호: `[BE DONE] 브랜치: feature/[feature-name]-be | PR/MR: [URL] | API 명세: [Wiki URL]`
+- 완료 신호: `[BE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL] | API 명세: [Wiki URL]`
 
 ## 품질 체크리스트
 - [ ] 올바른 Git 플랫폼 CLI 사용 (gh / glab)

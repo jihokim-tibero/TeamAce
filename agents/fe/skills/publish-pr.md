@@ -31,7 +31,7 @@
    ```bash
    git add -A
    git commit -m "feat(fe): [기능명] - [설명]"
-   git push -u origin feature/[feature-name]-fe
+   git push -u origin feature/[feature-name]
    ```
 
 4. PR 생성 (GitHub):
@@ -74,7 +74,7 @@
 
 ## 출력
 - PR/MR URL
-- 완료 신호: `[FE DONE] 브랜치: feature/[feature-name]-fe | PR/MR: [URL]`
+- 완료 신호: `[FE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL]`
 
 ## 품질 체크리스트
 - [ ] 올바른 Git 플랫폼 CLI 사용 (gh / glab)

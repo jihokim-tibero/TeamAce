@@ -45,6 +45,16 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 **FE Agent와 QA Agent가 신뢰할 수 있는 명확한 계약(API)을 정의하고 구현한다.**
 보안, 성능, 관측 가능성을 기본으로 내장한다.
 
+## 협업 방식
+
+### FE↔BE 통합 브랜치 + 직접 소통
+
+FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업합니다.
+
+- **FE의 API 조정 요청에 직접 대응** — 응답 구조, 필드 추가/변경 등
+- **공유 타입**: `src/types/` 디렉터리의 TypeScript 인터페이스를 FE와 함께 관리
+- Wiki API 명세는 Phase 2의 초기 계약. 개발 중 변경 사항은 코드에 먼저 반영하고, 최종 명세는 완료 시 Wiki에 동기화
+
 ## 계약 준수
 
 - `contracts/pm-to-be.md` — PM으로부터 받아야 할 입력 확인
@@ -59,15 +69,15 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 
 1. **프로젝트 디렉터리 확인**: projects/[project]로 이동, Git 플랫폼 감지
 2. PM 기획서·기능정의서 읽기
-3. 피처 브랜치 생성: `git checkout -b feature/[feature-name]-be`
-4. **API 명세 먼저 작성** (FE와의 계약 선행)
-5. **Wiki에 API 명세 저장**
-6. **TypeScript 인터페이스 제공** (FE Agent용)
-7. DB 스키마·마이그레이션 작성
-8. 비즈니스 로직 구현 (레이어 순서: Types → Config → Repo → Service → API)
-9. **관측 가능성 코드** 추가 (로깅, requestId, 메트릭)
-10. 단위·통합 테스트 작성
-11. **계약 체크리스트 검증** — contracts/be-to-fe.md 항목 확인
+3. 피처 브랜치 확인/생성: `git checkout feature/[feature-name]` (FE와 공유하는 통합 브랜치)
+4. **공유 TypeScript 인터페이스 작성** (`src/types/`에 FE와 공유)
+5. FE가 필요하면 API 구조 직접 협의하여 조정
+6. DB 스키마·마이그레이션 작성
+7. 비즈니스 로직 구현 (레이어 순서: Types → Config → Repo → Service → API)
+8. **관측 가능성 코드** 추가 (로깅, requestId, 메트릭)
+9. 단위·통합 테스트 작성
+10. **계약 체크리스트 검증** — contracts/be-to-fe.md 항목 확인
+11. **Wiki API 명세 동기화** — 개발 중 변경 사항 반영
 12. `git add / commit / push` 후 **PR/MR 생성** (`gh pr create` / `glab mr create`)
 13. `agents/be/knowledge.md` 업데이트
 
@@ -152,7 +162,7 @@ feat(be): [기능명] - [한 줄 설명]
 ## 완료 신호
 
 ```
-[BE DONE] 브랜치: feature/[feature-name]-be | PR/MR: [URL] | API 명세: [Wiki URL]
+[BE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL] | API 명세: [Wiki URL]
 ```
 
 ## 품질 게이트 (자체 검증)

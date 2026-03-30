@@ -1,6 +1,20 @@
-# BE → FE 핸드오프 계약
+# BE ↔ FE 협업 계약
 
-## BE가 FE에게 전달해야 하는 필수 산출물
+## 협업 모델
+
+FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업합니다.
+
+### 직접 소통 원칙
+- API 구조, 필드명, 응답 형태 등 **개발 중 조정이 필요하면 직접 소통**
+- 소통 결과는 코드(`src/types/` 공유 인터페이스)에 즉시 반영
+- Wiki API 명세는 Phase 2 초기 계약이며, 최종 명세는 개발 완료 시 동기화
+
+### 공유 타입 관리
+- `src/types/` 디렉터리에 공유 TypeScript 인터페이스 위치
+- BE가 초안을 작성하고 FE가 사용하면서 필요 시 함께 조정
+- 타입 변경 시 양쪽 코드에 즉시 반영 (같은 브랜치이므로 충돌 최소화)
+
+## BE가 FE에게 제공해야 하는 필수 산출물
 
 ### 1. API 엔드포인트 목록
 - [ ] Method, Path, 목적, 인증 방식
@@ -59,9 +73,9 @@ interface ErrorResponse {
 - 필드명 변경 시 PM 기능정의서 + UX 명세 + QA TC 동시 업데이트 필수
 
 ## 산출물 위치
-- API 명세: **Git Wiki** (`gh wiki` / `glab wiki`)
-- TypeScript 인터페이스: **Git Wiki** (API 명세에 포함) + 소스 코드 (PR/MR 브랜치)
-- FE Agent는 프로젝트 Git Wiki에서 API 명세를 조회
+- 공유 TypeScript 인터페이스: **`src/types/`** (코드 — FE/BE 동일 브랜치)
+- API 명세 (초기 계약): **Git Wiki** (`gh wiki` / `glab wiki`)
+- API 명세 (최종 동기화): 개발 완료 시 BE가 Wiki를 코드 기준으로 업데이트
 
 ## 검증 기준
 - FE Agent가 Git Wiki의 API 명세만 보고 타입 안전한 API 호출 코드를 작성 가능해야 함

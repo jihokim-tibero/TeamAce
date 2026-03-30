@@ -59,23 +59,25 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 ### 1. 테스트 시나리오 → Git Wiki
 ### 2. 회귀 테스트 결과 → PR/MR 코멘트
 ### 3. 스냅샷 테스트 → Git (스냅샷 파일)
-### 4. 버그 리포트 → Git Issue (gh issue / glab issue)
-### 5. 품질 게이트 판정 → 리드에게 보고
+### 4. E2E 테스트 → Git (테스트 코드 + 결과)
+### 5. 버그 리포트 → Git Issue (gh issue / glab issue)
+### 6. 품질 게이트 판정 → 리드에게 보고
 
 ## 작업 절차
 
 1. **프로젝트 디렉터리 확인**: projects/[project]로 이동, Git 플랫폼 감지
 2. PM 기획서·기능정의서 읽기
 3. UX 명세 읽기 (data-testid 목록 확보)
-4. `git log`, `git diff`, `grep`으로 FE/BE 브랜치의 변경 확인
+4. `git log`, `git diff`, `grep`으로 feature 브랜치의 변경 확인
 5. **리스크 분석**: 비즈니스 임팩트 기준 TC 우선순위 설정
 6. 테스트 시나리오 작성 (Given-When-Then)
 7. **변경 영향 분석**: 기존 기능에 미치는 영향 식별
-8. **회귀 테스트 스위트 실행**
-9. **스냅샷 테스트 실행** (UI + API 응답)
-10. 버그 발견 시 **Git Issue 생성** (`gh issue create` / `glab issue create`)
-11. **품질 게이트 판정** (harness/quality-gates.md Phase 4)
-12. `agents/qa/knowledge.md` 업데이트
+8. **E2E 테스트 작성 + 실행** (Playwright headless)
+9. **회귀 테스트 스위트 실행**
+10. **스냅샷 테스트 실행** (UI + API 응답)
+11. 버그 발견 시 **Git Issue 생성** (`gh issue create` / `glab issue create`)
+12. **품질 게이트 판정** (harness/quality-gates.md Phase 4)
+13. `agents/qa/knowledge.md` 업데이트
 
 ## 테스트 시나리오 형식
 
@@ -91,6 +93,69 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 **우선순위**: Critical / High / Medium / Low
 **리스크 근거**: [이 우선순위를 부여한 비즈니스 이유]
 **검증 유형**: 기능 / UI / 성능 / 접근성 / 보안 / 회귀
+```
+
+## E2E 테스트 (Playwright)
+
+### 도구 및 환경
+
+- **Playwright** (headless 모드) — 브라우저 기반 E2E 테스트
+- 개발 서버(`localhost`)를 대상으로 실행
+- 스크린샷 캡처로 UI 시각 검증 가능
+
+### E2E 테스트 전략
+
+1. **환경 준비**: FE/BE 개발 서버를 로컬에서 기동
+2. **Critical Path 우선**: 사용자 핵심 가치 경로를 E2E로 검증
+3. **data-testid 활용**: UX 명세의 data-testid로 요소 선택 (CSS selector 금지)
+4. **API 통합 검증**: FE→BE 실제 API 호출이 정상 동작하는지 확인
+5. **스크린샷 비교**: 주요 화면의 스크린샷을 캡처하여 시각적 회귀 감지
+
+### E2E 테스트 파일 구조
+
+```
+e2e/
+├── tests/
+│   ├── [feature].spec.ts       # 기능별 E2E 테스트
+│   └── regression.spec.ts      # 회귀 E2E 테스트
+├── fixtures/                   # 테스트 데이터
+├── screenshots/                # 스크린샷 베이스라인
+└── playwright.config.ts        # Playwright 설정
+```
+
+### E2E 테스트 형식
+
+```typescript
+// data-testid 기반 선택자만 사용
+test('TC-[번호]: [시나리오명]', async ({ page }) => {
+  // Given
+  await page.goto('/[path]');
+
+  // When
+  await page.getByTestId('[data-testid]').click();
+
+  // Then
+  await expect(page.getByTestId('[result-testid]')).toBeVisible();
+
+  // 스크린샷 캡처 (시각적 회귀 감지용)
+  await expect(page).toHaveScreenshot('[scenario].png');
+});
+```
+
+### E2E 실행 명령
+
+```bash
+# 개발 서버 기동 (백그라운드)
+npm run dev &
+
+# E2E 테스트 실행
+npx playwright test --reporter=html
+
+# 특정 기능만 실행
+npx playwright test tests/[feature].spec.ts
+
+# 스크린샷 베이스라인 업데이트
+npx playwright test --update-snapshots
 ```
 
 ## 회귀 테스트 체크리스트
@@ -113,6 +178,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 | Critical TC 통과율 | 100% | 테스트 결과 |
 | 회귀 TC 통과율 | 100% | 회귀 스위트 결과 |
 | 접근성 | WCAG AA | 자동화 검사 |
+| E2E 테스트 | Critical Path 100% 통과 | Playwright 결과 |
 | 스냅샷 | 의도하지 않은 변경 없음 | diff 확인 |
 
 ## 버그 리포트 형식 (GitHub Issue)
@@ -153,6 +219,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 완료 전 `harness/quality-gates.md` Phase 4 기준을 자체 검증:
 - [ ] Critical TC 100% 통과
 - [ ] High TC ≥ 95% 통과
+- [ ] E2E 테스트 — Critical Path 100% 통과
 - [ ] 회귀 테스트 100% 통과
 - [ ] 스냅샷 테스트 — 의도하지 않은 변경 없음
 - [ ] P95 < 500ms
