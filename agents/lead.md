@@ -38,7 +38,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent", "mcp__plugin_N
    - `github.com` → `gh` 사용
    - `gitlab` → `glab` 사용
 3. **에이전트 스폰 시 프로젝트 경로 전달**: `projects/[project]`
-4. **Wiki 접근 준비**: 해당 프로젝트의 Wiki가 산출물 저장소
+4. **문서 저장소 확인**: GitHub → Notion (Notion MCP) / GitLab → Git Wiki (`glab wiki`)
 
 ## 1. 태스크 분해
 
@@ -86,12 +86,12 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent", "mcp__plugin_N
 
 ```
 Phase 1: 기획
-  PM → PRD + 기능정의서 → Wiki 저장
+  PM → PRD + 기능정의서 → Notion/Wiki 저장
   ↓ (품질 게이트 1 통과 시)
 
 Phase 2: 설계
-  UX → Figma 시안 + UX 명세 → Figma + Wiki
-  BE → API 명세 → Wiki (UX와 병렬 가능)
+  UX → Figma 시안 + UX 명세 → Figma + Notion/Wiki
+  BE → API 명세 → Notion/Wiki (UX와 병렬 가능)
   ↓ (품질 게이트 2 통과 시)
 
 Phase 3: 구현
@@ -102,7 +102,7 @@ Phase 3: 구현
   ↓ (품질 게이트 3 통과 시)
 
 Phase 4: 검증
-  QA ← 전체 산출물 + 코드 → Wiki(시나리오) + Issue(버그)
+  QA ← 전체 산출물 + 코드 → Notion/Wiki(시나리오) + Issue(버그)
   ↓ (품질 게이트 4 통과 시 → 완료)
   ↓ (품질 게이트 4 미통과 시 → 수정 루프)
 
@@ -173,10 +173,10 @@ QA가 No-Go 판정을 내린 경우:
 ```
 [TEAMACE DONE]
 프로젝트: [projects/xxx]
-기획: [Wiki URL — PRD, 기능정의서]
-설계: [Figma URL + Wiki URL — UX 명세, API 명세]
+기획: [Notion/Wiki URL — PRD, 기능정의서]
+설계: [Figma URL + Notion/Wiki URL — UX 명세, API 명세]
 구현: [PR/MR URL — FE, BE]
-검증: [Wiki URL — TC + Issue URL — 버그]
+검증: [Notion/Wiki URL — TC + Issue URL — 버그]
 품질: 게이트 1~4 전체 통과
 ```
 

@@ -74,10 +74,10 @@ interface ErrorResponse {
 
 ## 산출물 위치
 - 공유 TypeScript 인터페이스: **`src/types/`** (코드 — FE/BE 동일 브랜치)
-- API 명세 (초기 계약): **Git Wiki** (`gh wiki` / `glab wiki`)
-- API 명세 (최종 동기화): 개발 완료 시 BE가 Wiki를 코드 기준으로 업데이트
+- API 명세 (초기 계약): GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
+- API 명세 (최종 동기화): 개발 완료 시 BE가 Notion/Wiki를 코드 기준으로 업데이트
 
 ## 검증 기준
-- FE Agent가 Git Wiki의 API 명세만 보고 타입 안전한 API 호출 코드를 작성 가능해야 함
+- FE Agent가 Notion/Wiki의 API 명세만 보고 타입 안전한 API 호출 코드를 작성 가능해야 함
 - 모든 에러 상황에 대한 처리가 명시되어야 함
 - `any` 타입 사용이 불가능할 정도로 타입이 구체적이어야 함

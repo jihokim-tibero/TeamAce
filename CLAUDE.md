@@ -41,14 +41,19 @@ TeamAce/                    ← 루트 (이 CLAUDE.md 위치)
 - Git 플랫폼 감지: `git remote -v`로 GitHub/GitLab 판별 → `gh` 또는 `glab` 사용
 
 ### 산출물 위치 원칙
-| 산출물 유형 | 위치 | 도구 |
-|------------|------|------|
-| 기획서, 기능정의서, UX 명세, API 명세, 테스트 시나리오 | **Git Wiki** | `gh wiki` / `glab wiki` |
-| UX 시안, 프로토타입 | **Figma** | Figma MCP |
-| 소스 코드, 테스트 코드, 마이그레이션 | **Git repo** | git CLI |
-| PR/MR, 코드 리뷰 | **Git PR/MR** | `gh pr` / `glab mr` |
-| 버그 리포트, 기능 요청 | **Git Issue** | `gh issue` / `glab issue` |
-| 중간 산출물, 비정기 메모, 회의록 | **Notion** | Notion MCP |
+
+문서 산출물의 저장소는 프로젝트의 Git 플랫폼에 따라 결정:
+- **GitHub 프로젝트** → **Notion** (Notion MCP)
+- **GitLab 프로젝트** → **Git Wiki** (`glab wiki`)
+
+| 산출물 유형 | GitHub 프로젝트 | GitLab 프로젝트 | 도구 |
+|------------|----------------|----------------|------|
+| 기획서, 기능정의서, UX 명세, API 명세, 테스트 시나리오 | **Notion** | **Git Wiki** | Notion MCP / `glab wiki` |
+| UX 시안, 프로토타입 | **Figma** | **Figma** | Figma MCP |
+| 소스 코드, 테스트 코드, 마이그레이션 | **Git repo** | **Git repo** | git CLI |
+| PR/MR, 코드 리뷰 | **GitHub PR** | **GitLab MR** | `gh pr` / `glab mr` |
+| 버그 리포트, 기능 요청 | **GitHub Issue** | **GitLab Issue** | `gh issue` / `glab issue` |
+| 중간 산출물, 비정기 메모, 회의록 | **Notion** | **Notion** | Notion MCP |
 
 ### 에이전트 간 계약
 - `contracts/` 디렉터리의 핸드오프 계약을 반드시 준수

@@ -23,9 +23,9 @@
 - BE가 필드명을 변경해야 하는 경우, PM에게 기능정의서 업데이트 요청 필수
 
 ## 산출물 위치
-- 기능정의서: **Git Wiki** (`gh wiki` / `glab wiki`)
-- BE Agent는 프로젝트 Git Wiki에서 기능정의서를 조회
+- 기능정의서: GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
+- BE Agent는 Notion 또는 Git Wiki에서 기능정의서를 조회
 
 ## 검증 기준
-- BE Agent가 Git Wiki의 기능정의서만 보고 API 엔드포인트 목록과 DB 스키마 초안을 도출 가능해야 함
+- BE Agent가 Notion/Wiki의 기능정의서만 보고 API 엔드포인트 목록과 DB 스키마 초안을 도출 가능해야 함
 - 비즈니스 규칙에 모호함이 없어야 함 ("경우에 따라" → 구체적 조건 분기)

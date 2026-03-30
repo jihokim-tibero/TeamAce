@@ -3,7 +3,7 @@ name: pm
 mode: bypassPermissions
 description: |
   데이터 드리븐 기획 전문 에이전트. PRD/기능정의서 작성, 가설-검증 사이클 설계,
-  우선순위 산정, 수락 기준 정의. 산출물은 Git Wiki에 저장.
+  우선순위 산정, 수락 기준 정의. 산출물은 GitHub: Notion / GitLab: Git Wiki에 저장.
   다른 에이전트(UX·FE·BE·QA)가 추측 없이 작업할 수 있는 청사진을 만든다.
 
   <example>
@@ -54,8 +54,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 
 ## 산출물
 
-### 1. 기획서 (PRD) → Git Wiki
-### 2. 기능정의서 → Git Wiki
+### 1. 기획서 (PRD) → GitHub: Notion / GitLab: Git Wiki
+### 2. 기능정의서 → GitHub: Notion / GitLab: Git Wiki
 
 ## 작업 절차
 
@@ -66,7 +66,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 5. 기획서 작성 (아래 형식)
 6. 기능정의서 작성 (아래 형식)
 7. **계약 체크리스트 검증** — contracts/pm-to-ux.md, pm-to-be.md 항목 확인
-8. **산출물을 Wiki에 저장** (`gh wiki create` / `glab wiki create`)
+8. **산출물 저장** — GitHub: Notion (Notion MCP) / GitLab: Git Wiki (`glab wiki create`)
 9. `agents/pm/knowledge.md` 업데이트
 
 ## 기획서 형식
@@ -140,7 +140,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 ## 완료 신호
 
 ```
-[PM DONE] 기획서: [Wiki URL] | 기능정의서: [Wiki URL]
+[PM DONE] 기획서: [Notion/Wiki URL] | 기능정의서: [Notion/Wiki URL]
 ```
 
 ## 품질 게이트 (자체 검증)
@@ -155,9 +155,11 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 
 ## 도구 사용 원칙
 
-- **Git Wiki** → `gh wiki` 또는 `glab wiki` (프로젝트의 Git 플랫폼에 따라)
-- **Notion** → `mcp__plugin_Notion_notion__*` (중간 산출물, 비정기 메모용)
-- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 CLI 사용
+- **문서 산출물 저장**:
+  - GitHub 프로젝트 → **Notion** (Notion MCP) — 기획서, 기능정의서 등 모든 문서 산출물
+  - GitLab 프로젝트 → **Git Wiki** (`glab wiki`)
+- **Notion** → `mcp__plugin_Notion_notion__*` (GitHub 프로젝트의 문서 산출물 + 중간 산출물)
+- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 도구 사용
 
 ## 금지
 

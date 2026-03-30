@@ -56,7 +56,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 
 ## 산출물
 
-### 1. 테스트 시나리오 → Git Wiki
+### 1. 테스트 시나리오 → GitHub: Notion / GitLab: Git Wiki
 ### 2. 회귀 테스트 결과 → PR/MR 코멘트
 ### 3. 스냅샷 테스트 → Git (스냅샷 파일)
 ### 4. E2E 테스트 → Git (테스트 코드 + 결과)
@@ -211,7 +211,7 @@ npx playwright test --update-snapshots
 ## 완료 신호
 
 ```
-[QA DONE] TC: [N]개 (Critical: N, High: N) | Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
+[QA DONE] TC: [N]개 (Critical: N, High: N) | Notion/Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
 ```
 
 ## 품질 게이트 (자체 검증)
@@ -228,10 +228,12 @@ npx playwright test --update-snapshots
 
 ## 도구 사용 원칙
 
-- **Git Wiki** → `gh wiki` 또는 `glab wiki` (테스트 시나리오 저장)
+- **문서 산출물 저장**:
+  - GitHub 프로젝트 → **Notion** (Notion MCP) — 테스트 시나리오 등 모든 문서 산출물
+  - GitLab 프로젝트 → **Git Wiki** (`glab wiki`)
 - **Git Issue** → `gh issue` 또는 `glab issue` (버그 리포트)
-- **Notion** → `mcp__plugin_Notion_notion__*` (중간 산출물, 비정기 메모용)
-- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 CLI 사용
+- **Notion** → `mcp__plugin_Notion_notion__*` (GitHub 프로젝트의 문서 산출물 + 중간 산출물)
+- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 도구 사용
 
 ## 금지
 

@@ -27,16 +27,20 @@
 
 ## 산출물 위치
 
-| 산출물 | 저장소 | 도구 |
-|--------|--------|------|
-| 기획서/기능정의서 | Git Wiki | `gh wiki` / `glab wiki` |
-| UX 명세 | Git Wiki | `gh wiki` / `glab wiki` |
-| Figma 시안 | Figma | Figma MCP |
-| API 명세 | Git Wiki | `gh wiki` / `glab wiki` |
-| 소스 코드 | Git branch + PR/MR | `gh pr` / `glab mr` |
-| 테스트 시나리오 | Git Wiki | `gh wiki` / `glab wiki` |
-| 버그 리포트 | Git Issue | `gh issue` / `glab issue` |
-| 중간 산출물/메모 | Notion | Notion MCP |
+문서 산출물의 저장소는 프로젝트의 Git 플랫폼에 따라 결정:
+- **GitHub 프로젝트** → **Notion** (Notion MCP)
+- **GitLab 프로젝트** → **Git Wiki** (`glab wiki`)
+
+| 산출물 | GitHub 프로젝트 | GitLab 프로젝트 | 도구 |
+|--------|----------------|----------------|------|
+| 기획서/기능정의서 | Notion | Git Wiki | Notion MCP / `glab wiki` |
+| UX 명세 | Notion | Git Wiki | Notion MCP / `glab wiki` |
+| Figma 시안 | Figma | Figma | Figma MCP |
+| API 명세 | Notion | Git Wiki | Notion MCP / `glab wiki` |
+| 소스 코드 | Git branch + PR | Git branch + MR | `gh pr` / `glab mr` |
+| 테스트 시나리오 | Notion | Git Wiki | Notion MCP / `glab wiki` |
+| 버그 리포트 | GitHub Issue | GitLab Issue | `gh issue` / `glab issue` |
+| 중간 산출물/메모 | Notion | Notion | Notion MCP |
 
 각 계약에서 "위치"를 참조할 때 위 테이블 기준을 따른다.
 

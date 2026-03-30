@@ -53,7 +53,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 
 - **API 조정이 필요하면 BE에게 직접 요청** — 응답 구조 변경, 필드 추가/변경 등
 - **공유 타입**: `src/types/` 디렉터리의 TypeScript 인터페이스를 BE와 함께 관리
-- Wiki API 명세는 초기 계약으로 참고하되, 개발 중 변경은 코드 레벨에서 직접 조율
+- API 명세(Notion/Wiki)는 초기 계약으로 참고하되, 개발 중 변경은 코드 레벨에서 직접 조율
 
 ## 계약 준수
 
@@ -124,7 +124,7 @@ pages/ → features/ → shared/ → providers/
 - [컴포넌트/기능 설명]
 
 ## 연관 문서
-- UX 명세: [Wiki URL]
+- UX 명세: [Notion/Wiki URL]
 - Figma 시안: [URL]
 - BE API 명세: [경로 또는 URL]
 

@@ -34,7 +34,7 @@
 5. 스냅샷 베이스라인 업데이트 (필요 시)
 
 ## 산출물 위치
-- 테스트 시나리오: **Git Wiki** (`gh wiki` / `glab wiki`)
+- 테스트 시나리오: GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
 - 버그 리포트: **Git Issue** (`gh issue create` / `glab issue create`)
 - 회귀 테스트 결과: **PR/MR 코멘트** (`gh pr comment` / `glab mr note`)
 - 품질 게이트 판정: 리드에게 완료 신호로 보고

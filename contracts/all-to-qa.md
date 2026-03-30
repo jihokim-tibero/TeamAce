@@ -28,14 +28,14 @@
 - [ ] 개발 서버 기동 방법 + 시드 데이터 (E2E 테스트용)
 
 ## 산출물 위치
-- 기획서/기능정의서 (PM): **Git Wiki**
-- UX 명세 (UX): **Git Wiki** / Figma 시안: **Figma**
-- API 명세 (BE): **Git Wiki**
+- 기획서/기능정의서 (PM): GitHub → **Notion** / GitLab → **Git Wiki**
+- UX 명세 (UX): GitHub → **Notion** / GitLab → **Git Wiki** / Figma 시안: **Figma**
+- API 명세 (BE): GitHub → **Notion** / GitLab → **Git Wiki**
 - 소스 코드 + 테스트 (FE/BE): **Git `feature/[feature-name]` 통합 브랜치**
-- QA Agent는 프로젝트 Git Wiki에서 기획서·UX 명세·API 명세를 조회
+- QA Agent는 Notion 또는 Git Wiki에서 기획서·UX 명세·API 명세를 조회
 
 ## 검증 기준
-- QA Agent가 Git Wiki의 산출물만으로 테스트 시나리오를 작성 가능해야 함
+- QA Agent가 Notion/Wiki의 산출물만으로 테스트 시나리오를 작성 가능해야 함
 - data-testid 목록이 UX 명세 ↔ FE 구현 간 일치해야 함
 - API 스키마가 BE 구현 ↔ FE 호출 간 일치해야 함
 - 수락 기준이 "~되어야 한다" 수준이 아닌, Given-When-Then으로 변환 가능해야 함

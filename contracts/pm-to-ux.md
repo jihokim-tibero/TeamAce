@@ -24,10 +24,10 @@
 - UX는 이 필드명을 data-testid, 컴포넌트 props에 그대로 사용
 
 ## 산출물 위치
-- 기획서 (PRD): **Git Wiki** (`gh wiki` / `glab wiki`)
-- 기능정의서: **Git Wiki** (`gh wiki` / `glab wiki`)
-- UX Agent는 프로젝트 Git Wiki에서 기획서·기능정의서를 조회
+- 기획서 (PRD): GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
+- 기능정의서: GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
+- UX Agent는 Notion 또는 Git Wiki에서 기획서·기능정의서를 조회
 
 ## 검증 기준
-- UX Agent가 Git Wiki의 기획서만 보고 "어떤 화면이 필요한지, 각 화면에서 무슨 일이 일어나는지" 파악 가능해야 함
+- UX Agent가 Notion/Wiki의 기획서만 보고 "어떤 화면이 필요한지, 각 화면에서 무슨 일이 일어나는지" 파악 가능해야 함
 - 모호한 표현 금지: "적절히 표시" → "성공 시 결과 카드 표시, 실패 시 에러 메시지 + 재시도 버튼 표시"

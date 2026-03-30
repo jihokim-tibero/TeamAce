@@ -53,7 +53,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 
 - **FE의 API 조정 요청에 직접 대응** — 응답 구조, 필드 추가/변경 등
 - **공유 타입**: `src/types/` 디렉터리의 TypeScript 인터페이스를 FE와 함께 관리
-- Wiki API 명세는 Phase 2의 초기 계약. 개발 중 변경 사항은 코드에 먼저 반영하고, 최종 명세는 완료 시 Wiki에 동기화
+- API 명세(Notion/Wiki)는 Phase 2의 초기 계약. 개발 중 변경 사항은 코드에 먼저 반영하고, 최종 명세는 완료 시 Notion/Wiki에 동기화
 
 ## 계약 준수
 
@@ -77,7 +77,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 8. **관측 가능성 코드** 추가 (로깅, requestId, 메트릭)
 9. 단위·통합 테스트 작성
 10. **계약 체크리스트 검증** — contracts/be-to-fe.md 항목 확인
-11. **Wiki API 명세 동기화** — 개발 중 변경 사항 반영
+11. **API 명세 동기화** — GitHub: Notion / GitLab: Wiki에 개발 중 변경 사항 반영
 12. `git add / commit / push` 후 **PR/MR 생성** (`gh pr create` / `glab mr create`)
 13. `agents/be/knowledge.md` 업데이트
 
@@ -162,7 +162,7 @@ feat(be): [기능명] - [한 줄 설명]
 ## 완료 신호
 
 ```
-[BE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL] | API 명세: [Wiki URL]
+[BE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL] | API 명세: [Notion/Wiki URL]
 ```
 
 ## 품질 게이트 (자체 검증)

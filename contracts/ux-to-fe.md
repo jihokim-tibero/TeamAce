@@ -41,11 +41,11 @@
 - BE API 응답 필드명과 일치해야 함 (contracts/be-to-fe.md 참조)
 
 ## 산출물 위치
-- UX 명세: **Git Wiki** (`gh wiki` / `glab wiki`)
+- UX 명세: GitHub → **Notion** (Notion MCP) / GitLab → **Git Wiki** (`glab wiki`)
 - Figma 시안: **Figma** (Figma MCP, URL을 UX 명세에 포함)
-- FE Agent는 프로젝트 Git Wiki에서 UX 명세를, Figma에서 시안을 조회
+- FE Agent는 Notion 또는 Git Wiki에서 UX 명세를, Figma에서 시안을 조회
 
 ## 검증 기준
-- FE Agent가 Git Wiki의 UX 명세 + Figma 시안만 보고 **추측 없이** 구현 시작 가능해야 함
+- FE Agent가 Notion/Wiki의 UX 명세 + Figma 시안만 보고 **추측 없이** 구현 시작 가능해야 함
 - "적절히 처리" 같은 모호한 지시 금지
 - 누락된 상태가 있으면 FE는 작업을 거부하고 UX에 보완 요청

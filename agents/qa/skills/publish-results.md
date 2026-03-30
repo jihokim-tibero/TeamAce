@@ -1,7 +1,9 @@
 # QA 결과 발행 Skill
 
 ## 목적
-테스트 시나리오를 Git Wiki에, 버그를 Git Issue에, 회귀 결과를 PR 코멘트로 발행한다.
+테스트 시나리오를 문서 저장소에, 버그를 Git Issue에, 회귀 결과를 PR 코멘트로 발행한다.
+- GitHub 프로젝트 → 테스트 시나리오는 **Notion** (Notion MCP)
+- GitLab 프로젝트 → 테스트 시나리오는 **Git Wiki** (`glab wiki`)
 
 ## 트리거
 - 테스트 시나리오 작성 완료 후
@@ -20,17 +22,16 @@
    cd projects/[project]
    git remote -v
    ```
-   - `github.com` → `gh` CLI
+   - `github.com` → Notion MCP + `gh` CLI
    - `gitlab` → `glab` CLI
 
-### 테스트 시나리오 → Git Wiki
+### 테스트 시나리오 발행
 
-2a. GitHub:
-   ```bash
-   gh wiki create "[기능명]-테스트시나리오" --message "Add test scenarios for [기능명]" < test-scenarios.md
-   ```
+2a. GitHub → Notion:
+   - Notion MCP의 `notion-create-pages` 도구로 테스트 시나리오 페이지 생성
+   - 프로젝트명을 제목 prefix로 사용 (예: `[yoseek] 테스트 시나리오`)
 
-2b. GitLab:
+2b. GitLab → Git Wiki:
    ```bash
    glab wiki create "[기능명]-테스트시나리오" --title "[기능명] 테스트 시나리오" --content "$(cat test-scenarios.md)"
    ```
@@ -63,23 +64,23 @@
 
 5. 모든 결과물 URL 확보 → 완료 신호:
    ```
-   [QA DONE] TC: [N]개 (Critical: N, High: N) | Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
+   [QA DONE] TC: [N]개 (Critical: N, High: N) | Notion/Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
    ```
 
 ## 출력
-- Wiki URL (테스트 시나리오)
+- Notion/Wiki URL (테스트 시나리오)
 - Issue URL (버그 — 해당 시)
 - PR 코멘트 (회귀 결과)
 - 완료 신호
 
 ## 품질 체크리스트
-- [ ] 올바른 Git 플랫폼 CLI 사용 (gh / glab)
-- [ ] 테스트 시나리오 Wiki 페이지 정상 생성
+- [ ] Git 플랫폼에 맞는 도구 사용 (GitHub→Notion MCP / GitLab→glab)
+- [ ] 테스트 시나리오 페이지 정상 생성
 - [ ] 버그 Issue에 심각도 라벨 지정
 - [ ] 버그 Issue에 재현 단계 (Given-When-Then) 포함
 - [ ] 회귀 결과가 PR/MR 코멘트로 등록
 
 ## 안티패턴
-- 버그를 Wiki에 작성 (Issue가 아닌 곳에)
+- 버그를 Notion/Wiki에 작성 (Issue가 아닌 곳에)
 - Issue에 재현 단계 없이 "동작 안 함"만 작성
 - 회귀 결과를 보고하지 않고 완료 선언
