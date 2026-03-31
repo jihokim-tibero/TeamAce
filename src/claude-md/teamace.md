@@ -2,7 +2,7 @@
 
 ## 오케스트레이션
 
-당신은 TeamAce가 설치된 환경에서 동작하는 Claude Code입니다.
+당신은 TeamAce 멀티에이전트 시스템이 적용된 Claude Code입니다.
 **작업 시작 전 반드시 `~/.claude/agents/lead.md`를 읽고 오케스트레이션 지침을 따르세요.**
 
 ### Agent Team 활용 (필수)
@@ -85,7 +85,7 @@ Lead가 작업(Task)을 생성하고 팀원에게 할당합니다.
 
 ## 경로 체계
 
-TeamAce 파일은 `~/.claude/` 아래에 설치되어 있습니다:
+TeamAce 파일은 `~/.claude/` 아래에 위치합니다:
 
 ```
 ~/.claude/
@@ -104,23 +104,15 @@ TeamAce 파일은 `~/.claude/` 아래에 설치되어 있습니다:
 
 현재 작업 중인 프로젝트의 소스 코드는 현재 디렉터리(`.`)에 위치합니다.
 
-## 전제 조건 (프로젝트별 셋업)
+## Impeccable 디자인 스킬
 
-각 프로젝트에서 `teamace init`을 실행하면 다음이 설정됩니다:
+PUB 에이전트가 사용하는 디자인 품질 도구. 세션 레벨에서 자동 로드됨.
 
-### Impeccable 디자인 스킬
-```bash
-teamace init    # 또는 직접: npx skills add pbakaus/impeccable
-```
-
-설치 후 프로젝트의 `.claude/skills/`에 다음이 배치됨:
-- `frontend-design` — 기초 디자인 스킬 (1개)
+- `frontend-design` — 기초 디자인 스킬
 - 20개 커맨드: `/audit`, `/polish`, `/critique`, `/adapt`, `/animate`, `/arrange`, `/bolder`, `/clarify`, `/colorize`, `/delight`, `/distill`, `/extract`, `/harden`, `/normalize`, `/onboard`, `/optimize`, `/overdrive`, `/quieter`, `/typeset`, `/teach-impeccable`
 - 7개 레퍼런스: `typography.md`, `color-and-contrast.md`, `spatial-design.md`, `motion-design.md`, `interaction-design.md`, `responsive-design.md`, `ux-writing.md`
 
-Claude Code가 `.claude/skills/`를 세션 레벨에서 자동 로드하므로, PUB 에이전트가 Impeccable 커맨드와 레퍼런스를 별도 import 없이 사용할 수 있다.
-
-> **Impeccable이 없으면 PUB 에이전트의 디자인 품질 게이트를 통과할 수 없다.**
+> **Impeccable 커맨드와 레퍼런스가 없으면 PUB 에이전트의 디자인 품질 게이트를 통과할 수 없다.**
 
 ## PUB↔FE 역할 분리
 
