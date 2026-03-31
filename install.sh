@@ -151,6 +151,11 @@ if [ -f "$SCRIPT_DIR/src/config/settings.json" ]; then
         }
       }
 
+      // Deep merge env (Agent Team 실험 기능 등)
+      if (teamace.env) {
+        existing.env = { ...existing.env, ...teamace.env };
+      }
+
       // Deep merge mcpServers
       if (teamace.mcpServers) {
         existing.mcpServers = { ...existing.mcpServers, ...teamace.mcpServers };

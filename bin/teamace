@@ -42,6 +42,19 @@ detect_platform() {
   fi
 }
 
+# Agent Team 실험 기능 활성화 여부 확인
+check_agent_team() {
+  if [ -f "$CLAUDE_DIR/settings.json" ]; then
+    node -e "
+      const s = JSON.parse(require('fs').readFileSync('$CLAUDE_DIR/settings.json','utf8'));
+      process.exit(s.env && s.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === '1' ? 0 : 1);
+    " 2>/dev/null && return 0
+  fi
+  # 환경변수로도 체크
+  [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" = "1" ] && return 0
+  return 1
+}
+
 # Impeccable 설치 여부 확인 (글로벌 + 프로젝트 레벨)
 check_impeccable() {
   local project="${1:-.}"
@@ -124,7 +137,17 @@ cmd_init() {
     fi
   fi
 
-  # 2. Create project-level CLAUDE.md if not exists
+  # 2. Check Agent Team experimental feature
+  info "Agent Team 실험 기능 확인 중..."
+  if check_agent_team; then
+    ok "  → Agent Team 활성화됨"
+  else
+    warn "  → Agent Team이 비활성 상태입니다."
+    warn "  → install.sh를 다시 실행하거나, ~/.claude/settings.json에 다음을 추가하세요:"
+    echo '    "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }'
+  fi
+
+  # 3. Create project-level CLAUDE.md if not exists
   local project_claude="$project_dir/CLAUDE.md"
   if [ ! -f "$project_claude" ]; then
     info "프로젝트 CLAUDE.md 생성 중..."
@@ -249,6 +272,13 @@ cmd_status() {
     echo -e "  글로벌 지침:   ${RED}미적용${NC}"
   fi
 
+  # Agent Team
+  if check_agent_team; then
+    echo -e "  Agent Team:    ${GREEN}활성화${NC}"
+  else
+    echo -e "  Agent Team:    ${RED}비활성${NC} (install.sh 재실행 필요)"
+  fi
+
   # Current project check
   echo ""
   echo -e "${BOLD}현재 프로젝트 ($(pwd))${NC}"
@@ -287,6 +317,72 @@ cmd_status() {
     else
       echo -e "  프로젝트 구조: ${YELLOW}Git 저장소 없음${NC}"
     fi
+  fi
+  echo ""
+}
+
+# ─────────────────────────────────────────────
+# teamace clean — 현재 프로젝트의 init 결과 정리
+# ─────────────────────────────────────────────
+
+cmd_clean() {
+  local project_dir="${1:-.}"
+  project_dir="$(cd "$project_dir" && pwd)"
+
+  info "프로젝트 정리: $project_dir"
+  echo ""
+
+  local cleaned=0
+
+  # 1. Remove TeamAce reference from project CLAUDE.md
+  local project_claude="$project_dir/CLAUDE.md"
+  if [ -f "$project_claude" ] && grep -q "TeamAce" "$project_claude"; then
+    warn "CLAUDE.md에서 TeamAce 참조를 제거합니다."
+    read -rp "CLAUDE.md를 삭제하시겠습니까? (n=TeamAce 참조만 제거) [y/N] " yn
+    if [[ "$yn" =~ ^[Yy]$ ]]; then
+      rm -f "$project_claude"
+      ok "  → CLAUDE.md 삭제 완료"
+    else
+      # Remove TeamAce activation section only
+      sed '/## TeamAce 활성화/,/오케스트레이션 지침을 따르세요\./d' "$project_claude" > "$project_claude.tmp"
+      mv "$project_claude.tmp" "$project_claude"
+      ok "  → CLAUDE.md에서 TeamAce 참조 제거 완료"
+    fi
+    cleaned=$((cleaned + 1))
+  else
+    info "  → CLAUDE.md에 TeamAce 참조 없음 (건너뜀)"
+  fi
+
+  # 2. Remove Impeccable skills from project (프로젝트 레벨만)
+  if [ -d "$project_dir/.claude/skills" ]; then
+    local has_impeccable=0
+    [ -d "$project_dir/.claude/skills/frontend-design" ] && has_impeccable=1
+    ls "$project_dir"/.claude/skills/*impeccable* &>/dev/null 2>&1 && has_impeccable=1
+
+    if [ "$has_impeccable" -eq 1 ]; then
+      warn "프로젝트 레벨 Impeccable 스킬을 제거합니다."
+      read -rp "제거하시겠습니까? [y/N] " yn
+      if [[ "$yn" =~ ^[Yy]$ ]]; then
+        rm -rf "$project_dir/.claude/skills"
+        ok "  → .claude/skills/ 제거 완료"
+        cleaned=$((cleaned + 1))
+      fi
+    fi
+  fi
+
+  # 3. Remove .claude directory if empty
+  if [ -d "$project_dir/.claude" ]; then
+    if [ -z "$(ls -A "$project_dir/.claude" 2>/dev/null)" ]; then
+      rmdir "$project_dir/.claude"
+      ok "  → 빈 .claude/ 디렉터리 제거 완료"
+    fi
+  fi
+
+  echo ""
+  if [ "$cleaned" -gt 0 ]; then
+    ok "프로젝트 정리 완료 ($cleaned개 항목 제거)"
+  else
+    info "정리할 항목이 없습니다."
   fi
   echo ""
 }
@@ -341,6 +437,20 @@ cmd_uninstall() {
     info "CLAUDE.md에서 TeamAce 지침 제거 완료"
   fi
 
+  # Remove Agent Team env from settings.json
+  if [ -f "$CLAUDE_DIR/settings.json" ]; then
+    node -e "
+      const fs = require('fs');
+      const s = JSON.parse(fs.readFileSync('$CLAUDE_DIR/settings.json', 'utf8'));
+      if (s.env) {
+        delete s.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+        if (Object.keys(s.env).length === 0) delete s.env;
+      }
+      fs.writeFileSync('$CLAUDE_DIR/settings.json', JSON.stringify(s, null, 2));
+    " 2>/dev/null
+    info "settings.json에서 Agent Team 설정 제거 완료"
+  fi
+
   # Remove CLI
   rm -f "$HOME/.local/bin/teamace"
   info "CLI 제거 완료"
@@ -356,6 +466,7 @@ cmd_uninstall() {
 
 case "${1:-help}" in
   init)       cmd_init "${2:-}" ;;
+  clean)      cmd_clean "${2:-}" ;;
   status)     cmd_status ;;
   update)     cmd_update ;;
   uninstall)  cmd_uninstall ;;
@@ -366,9 +477,10 @@ case "${1:-help}" in
     echo ""
     echo "사용법:"
     echo "  teamace init [path]   현재 프로젝트(또는 지정 경로)에 TeamAce 초기화"
+    echo "  teamace clean [path]  현재 프로젝트의 init 결과 정리 (CLAUDE.md, .claude/skills)"
     echo "  teamace status        설치 상태 및 현재 프로젝트 상태 확인"
     echo "  teamace update        업데이트 안내"
-    echo "  teamace uninstall     TeamAce 완전 제거"
+    echo "  teamace uninstall     TeamAce 글로벌 제거 (uninstall.sh와 동일)"
     echo "  teamace version       설치된 버전 출력"
     echo "  teamace help          이 도움말 표시"
     echo ""

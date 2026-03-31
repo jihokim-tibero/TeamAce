@@ -5,6 +5,20 @@
 당신은 TeamAce가 설치된 환경에서 동작하는 Claude Code입니다.
 **작업 시작 전 반드시 `~/.claude/agents/lead.md`를 읽고 오케스트레이션 지침을 따르세요.**
 
+### Agent Team 활용 (필수)
+
+TeamAce는 Claude Code의 **Agent Team** 기능을 기반으로 동작합니다.
+각 에이전트(PM, PUB, FE, BE, QA)는 Agent Team의 서브 에이전트로 실행되며,
+Lead 오케스트레이터가 `~/.claude/agents/` 아래의 에이전트 정의를 참조하여 팀을 구성합니다.
+
+작업 요청을 받으면:
+1. Lead 에이전트(`~/.claude/agents/lead.md`)를 읽어 오케스트레이션 순서를 파악한다
+2. 각 단계에서 해당 에이전트를 **Agent Team 서브 에이전트로 생성**하여 작업을 위임한다
+3. 서브 에이전트 완료 후 핸드오프 계약에 따라 다음 에이전트로 전달한다
+
+> **Agent Team 실험 기능이 활성화되어 있어야 합니다.**
+> `install.sh`가 `~/.claude/settings.json`의 `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`를 자동으로 `"1"`로 설정합니다.
+
 사용 가능한 에이전트:
 
 | 에이전트 | 파일 | 역할 |
