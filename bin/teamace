@@ -28,6 +28,34 @@ check_installed() {
   fi
 }
 
+# Git 플랫폼 감지
+detect_platform() {
+  local dir="$1"
+  if git -C "$dir" remote -v 2>/dev/null | grep -q "github.com"; then
+    echo "github"
+  elif git -C "$dir" remote -v 2>/dev/null | grep -q "gitlab"; then
+    echo "gitlab"
+  elif git -C "$dir" remote -v 2>/dev/null | grep -q "bitbucket"; then
+    echo "bitbucket"
+  else
+    echo "unknown"
+  fi
+}
+
+# Impeccable 설치 여부 확인 (글로벌 + 프로젝트 레벨)
+check_impeccable() {
+  local project="${1:-.}"
+  # 글로벌: ~/.agents/skills/ (npx skills add --global)
+  [ -d "$HOME/.agents/skills/frontend-design" ] && return 0
+  # 글로벌: ~/.claude/commands/ (Claude Code symlink)
+  [ -d "$HOME/.claude/commands/frontend-design" ] && return 0
+  ls "$HOME"/.claude/commands/*impeccable* &>/dev/null 2>&1 && return 0
+  # 프로젝트 레벨: .claude/skills/
+  [ -d "$project/.claude/skills/frontend-design" ] && return 0
+  ls "$project"/.claude/skills/*impeccable* &>/dev/null 2>&1 && return 0
+  return 1
+}
+
 # ─────────────────────────────────────────────
 # teamace init — 현재 프로젝트 초기화
 # ─────────────────────────────────────────────
@@ -41,55 +69,107 @@ cmd_init() {
   info "프로젝트 초기화: $project_dir"
   echo ""
 
-  # Check if it's a git repo
-  if [ ! -d "$project_dir/.git" ]; then
-    warn "Git 저장소가 아닙니다. git init을 먼저 실행해주세요."
-    read -rp "그래도 계속 진행하시겠습니까? [y/N] " yn
-    [[ "$yn" =~ ^[Yy]$ ]] || exit 0
+  # Detect project structure: single repo / multi-repo / no repo
+  local project_type="none"
+  local -a sub_repos=()
+  local platforms=""
+
+  if [ -d "$project_dir/.git" ]; then
+    project_type="single"
+    platforms=$(detect_platform "$project_dir")
+    info "Git 저장소: 단일 레포"
+    info "Git 플랫폼: $platforms"
+  else
+    # Scan for git repos in immediate subdirectories
+    for d in "$project_dir"/*/; do
+      [ -d "${d}.git" ] && sub_repos+=("$(basename "$d")")
+    done
+
+    if [ ${#sub_repos[@]} -gt 0 ]; then
+      project_type="multi"
+      info "멀티 레포 프로젝트 감지 (${#sub_repos[@]}개 레포)"
+      for repo in "${sub_repos[@]}"; do
+        local p
+        p=$(detect_platform "$project_dir/$repo")
+        echo -e "    ${CYAN}→${NC} $repo ${BOLD}($p)${NC}"
+        # Collect unique platforms
+        case "$platforms" in
+          *"$p"*) ;;
+          "") platforms="$p" ;;
+          *)  platforms="$platforms, $p" ;;
+        esac
+      done
+      info "Git 플랫폼: $platforms"
+    else
+      warn "Git 저장소가 아니며 하위 레포도 없습니다."
+      read -rp "그래도 계속 진행하시겠습니까? [y/N] " yn
+      [[ "$yn" =~ ^[Yy]$ ]] || exit 0
+      platforms="unknown"
+      info "Git 플랫폼: $platforms"
+    fi
   fi
 
-  # Detect git platform
-  local platform="unknown"
-  if git -C "$project_dir" remote -v 2>/dev/null | grep -q "github.com"; then
-    platform="github"
-  elif git -C "$project_dir" remote -v 2>/dev/null | grep -q "gitlab"; then
-    platform="gitlab"
-  fi
-  info "Git 플랫폼: $platform"
-
-  # 1. Install Impeccable design skill
+  # 1. Install Impeccable design skill (non-interactive)
   info "Impeccable 디자인 스킬 설치 중..."
-  if [ -d "$project_dir/.claude/skills/frontend-design" ] || \
-     ls "$project_dir"/.claude/skills/*impeccable* &>/dev/null 2>&1; then
+  if check_impeccable "$project_dir"; then
     ok "  → Impeccable 이미 설치됨 (건너뜀)"
   else
-    (cd "$project_dir" && npx -y skills add pbakaus/impeccable 2>/dev/null) && \
-      ok "  → Impeccable 설치 완료" || \
-      warn "  → Impeccable 자동 설치 실패. 수동 설치 필요: cd $project_dir && npx skills add pbakaus/impeccable"
+    # --agent claude-code: Claude Code(.claude/skills/)에만 설치
+    # --yes: 인터랙티브 프롬프트 건너뜀
+    if (cd "$project_dir" && npx -y skills add pbakaus/impeccable --agent claude-code --yes 2>/dev/null); then
+      ok "  → Impeccable 설치 완료 (.claude/skills/)"
+    else
+      warn "  → 자동 설치 실패. 수동 설치:"
+      warn "    cd $project_dir && npx skills add pbakaus/impeccable --agent claude-code --yes"
+    fi
   fi
 
   # 2. Create project-level CLAUDE.md if not exists
   local project_claude="$project_dir/CLAUDE.md"
   if [ ! -f "$project_claude" ]; then
     info "프로젝트 CLAUDE.md 생성 중..."
-    cat > "$project_claude" << 'CLAUDEMD'
-# 프로젝트 설정
 
-## TeamAce 활성화
+    # Build CLAUDE.md content dynamically
+    {
+      echo "# 프로젝트 설정"
+      echo ""
+      echo "## TeamAce 활성화"
+      echo ""
+      echo "이 프로젝트는 TeamAce 멀티에이전트 시스템을 사용합니다."
+      echo "작업 시작 전 반드시 \`~/.claude/agents/lead.md\`를 읽고 오케스트레이션 지침을 따르세요."
+      echo ""
+      echo "## 프로젝트 정보"
+      echo ""
+      echo "- **프로젝트명**: (프로젝트명 기입)"
+      echo "- **프로젝트 구조**: $([ "$project_type" = "multi" ] && echo "멀티 레포" || echo "단일 레포")"
+      echo "- **Git 플랫폼**: $platforms"
+      echo "- **기술 스택**: (기술 스택 기입)"
 
-이 프로젝트는 TeamAce 멀티에이전트 시스템을 사용합니다.
-작업 시작 전 반드시 `~/.claude/agents/lead.md`를 읽고 오케스트레이션 지침을 따르세요.
+      if [ "$project_type" = "multi" ]; then
+        echo ""
+        echo "## 레포지토리 구성"
+        echo ""
+        echo "이 프로젝트는 여러 Git 레포를 하나의 워크스페이스로 묶어 운영합니다."
+        echo ""
+        for repo in "${sub_repos[@]}"; do
+          local p
+          p=$(detect_platform "$project_dir/$repo")
+          echo "- **$repo** ($p): (역할 기입)"
+        done
+        echo ""
+        echo "### 멀티 레포 작업 규칙"
+        echo ""
+        echo "- 각 레포는 독립된 Git 히스토리를 가집니다"
+        echo "- 크로스 레포 변경 시 의존성 순서에 맞게 커밋하세요"
+        echo "- PR/MR은 각 레포에 개별 생성합니다"
+      fi
 
-## 프로젝트 정보
+      echo ""
+      echo "## 프로젝트별 규칙"
+      echo ""
+      echo "(프로젝트 고유 규칙을 여기에 추가하세요)"
+    } > "$project_claude"
 
-- **프로젝트명**: (프로젝트명 기입)
-- **Git 플랫폼**: (자동 감지됨)
-- **기술 스택**: (기술 스택 기입)
-
-## 프로젝트별 규칙
-
-(프로젝트 고유 규칙을 여기에 추가하세요)
-CLAUDEMD
     ok "  → CLAUDE.md 생성 완료"
   else
     # Check if TeamAce reference exists
@@ -116,7 +196,14 @@ CLAUDEMD
   echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
   echo "  프로젝트: $project_dir"
-  echo "  플랫폼:   $platform"
+  echo "  구조:     $([ "$project_type" = "multi" ] && echo "멀티 레포 (${#sub_repos[@]}개)" || echo "단일 레포")"
+  echo "  플랫폼:   $platforms"
+  if [ "$project_type" = "multi" ]; then
+    echo "  레포:"
+    for repo in "${sub_repos[@]}"; do
+      echo "    → $repo"
+    done
+  fi
   echo ""
   echo "  이제 이 디렉터리에서 Claude Code를 실행하면 TeamAce를 사용할 수 있습니다."
   echo ""
@@ -173,23 +260,34 @@ cmd_status() {
     echo -e "  TeamAce 참조:  ${YELLOW}없음 (teamace init 실행 필요)${NC}"
   fi
 
-  if [ -d ".claude/skills" ]; then
-    if ls .claude/skills/*impeccable* &>/dev/null 2>&1 || [ -d ".claude/skills/frontend-design" ]; then
-      echo -e "  Impeccable:    ${GREEN}설치됨${NC}"
-    else
-      echo -e "  Impeccable:    ${YELLOW}미설치${NC}"
-    fi
+  if check_impeccable "$(pwd)"; then
+    echo -e "  Impeccable:    ${GREEN}설치됨${NC}"
   else
     echo -e "  Impeccable:    ${YELLOW}미설치${NC}"
   fi
 
-  local platform="unknown"
-  if git remote -v 2>/dev/null | grep -q "github.com"; then
-    platform="GitHub"
-  elif git remote -v 2>/dev/null | grep -q "gitlab"; then
-    platform="GitLab"
+  # Detect project structure
+  if [ -d ".git" ]; then
+    local platform
+    platform=$(detect_platform "$(pwd)")
+    echo -e "  프로젝트 구조: 단일 레포"
+    echo -e "  Git 플랫폼:    ${CYAN}${platform}${NC}"
+  else
+    local -a status_repos=()
+    for d in ./*/; do
+      [ -d "${d}.git" ] && status_repos+=("$(basename "$d")")
+    done
+    if [ ${#status_repos[@]} -gt 0 ]; then
+      echo -e "  프로젝트 구조: ${CYAN}멀티 레포 (${#status_repos[@]}개)${NC}"
+      for repo in "${status_repos[@]}"; do
+        local p
+        p=$(detect_platform "$(pwd)/$repo")
+        echo -e "    ${CYAN}→${NC} $repo ($p)"
+      done
+    else
+      echo -e "  프로젝트 구조: ${YELLOW}Git 저장소 없음${NC}"
+    fi
   fi
-  echo -e "  Git 플랫폼:    ${CYAN}${platform}${NC}"
   echo ""
 }
 
