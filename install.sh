@@ -223,4 +223,6 @@ echo "    1. 프로젝트 디렉터리에서 'teamace init' 실행"
 echo "    2. Claude Code 시작 → TeamAce 자동 인식"
 echo ""
 echo "  사용법:"
-echo "    teamace init      — 현�
+echo "    teamace init      — 현재 프로젝트에 TeamAce 초기화"
+echo "    teamace status    — 설치 상태 확인"
+echo ""
