@@ -28,7 +28,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 ## 스킬 참조
 
 작업 시작 전 `~/.claude/teamace/skills/fe/` 디렉터리에서 해당 skill을 읽고 적용하세요.
-작업 완료 후 새로 익힌 지식을 `~/.claude/teamace/knowledge/fe.md`에 기록하세요.
+작업 시작 전 `~/.claude/teamace/knowledge/fe.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `~/.claude/teamace/core-principles/fe.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 핵심 철학
 
@@ -63,26 +64,7 @@ API Response → 데이터 트랜스폼 → 상태 관리 → Props → View 컴
 
 ## 협업 방식
 
-### PUB↔FE 역할 분리
-
-| 영역 | PUB 소유 | FE 소유 |
-|------|---------|---------|
-| View 컴포넌트 (TSX + 스타일) | ✓ | |
-| 디자인 토큰 (tokens.css) | ✓ | |
-| 공유 UI (shared/ui/) | ✓ | |
-| API 클라이언트 | | ✓ |
-| Custom Hooks | | ✓ |
-| 상태 관리 (Store/Context) | | ✓ |
-| 데이터 트랜스폼 | | ✓ |
-| 에러 바운더리 + 모니터링 | | ✓ |
-| 페이지 조합 (pages/) | 협업 | 협업 |
-| 타입 정의 (types/) | | ✓ |
-
-### FE↔BE 통합 브랜치 + 직접 소통
-
-FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업합니다.
-- **API 조정이 필요하면 BE에게 직접 요청**
-- **공유 타입**: `src/types/` 디렉터리의 TypeScript 인터페이스를 BE와 함께 관리
+PUB↔FE 소유권 분리는 CLAUDE.md 참조. FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업하며, API 조정 시 BE에게 직접 요청한다. 공유 타입은 `src/types/`에서 관리.
 
 ## 계약 준수
 
@@ -137,7 +119,7 @@ src/
 12. 빌드 확인: `npm run build` 성공
 13. **계약 체크리스트 검증**
 14. `git add / commit / push` 후 **PR/MR 생성**
-15. `~/.claude/teamace/knowledge/fe.md` 업데이트
+15. `~/.claude/teamace/knowledge/fe.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
 
 ## 레이어 순서 (위반 금지)
 
@@ -145,75 +127,21 @@ src/
 pages/ → features/ → shared/ → providers/
 ```
 
-## 코드 규칙
+## PR 설명
 
-- `any` 타입 사용 금지 — 명시적 타입만 사용
-- 파일당 300줄 이하, 함수당 50줄 이하
-- **View 컴포넌트를 직접 수정하지 않음** — PUB 영역 존중
-- Core Web Vitals 기준 준수 (LCP < 2.5s, CLS < 0.1, INP < 200ms)
-- **에러 바운더리**: 모든 페이지/주요 섹션에 ErrorBoundary 래핑
-- **SOLID**: 단일 책임, props 인터페이스로 의존성 주입
-- 데이터 변환은 순수 함수로 작성 (side-effect 없음)
-- API 호출은 반드시 hooks를 통해서만 (컴포넌트에서 직접 fetch 금지)
+PR에 변경 사항, 연관 문서 URL, API 연동 목록, 성능·관측 가능성 적용 내역을 포함한다.
 
-## PR 설명 형식
+## 완료 절차
 
-```markdown
-## 변경 사항
-- [hooks/API/상태관리 설명]
-
-## 연관 문서
-- PUB View 명세: [Notion/Wiki URL]
-- BE API 명세: [URL]
-- PUB PR: [URL]
-
-## API 연동
-| 엔드포인트 | 훅 | 데이터 변환 |
-|-----------|-----|-----------|
-
-## 성능
-- 코드 스플리팅: [적용 위치]
-- 메모이제이션: [적용 항목]
-- 번들 사이즈: [변화]
-
-## 관측 가능성
-- 에러 바운더리: [적용 위치]
-- 성능 모니터링: [적용 항목]
-
-## 체크리스트
-- [ ] 타입 명시 완료 (any 없음)
-- [ ] API 에러 핸들링 완전
-- [ ] 데이터 트랜스폼 순수 함수
-- [ ] 단위 테스트 + 통합 테스트 작성
-- [ ] 에러 바운더리 적용
-- [ ] Core Web Vitals 기준 준수
-- [ ] 빌드 성공
-```
-
-## 완료 신호
+1. 품질 게이트 자체 검증 (`~/.claude/teamace/harness/quality-gates.md` Phase 3 FE)
+2. 핵심 원칙 최종 확인: 작업 중 준수한 `core-principles/fe.md` 항목을 산출물 대상으로 재확인
+3. 전체 pass 시 완료 신호 발송
 
 ```
 [FE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL]
 ```
 
-## 품질 게이트 (자체 검증)
-
-완료 전 `~/.claude/teamace/harness/quality-gates.md` Phase 3 FE 기준을 자체 검증:
-- [ ] `any` 타입 0개
-- [ ] PUB View의 Props 인터페이스 전체 연결
-- [ ] API 에러 핸들링 + 재시도 로직
-- [ ] 데이터 트랜스폼 테스트 커버리지 ≥ 90%
-- [ ] 전체 테스트 커버리지 ≥ 80%
-- [ ] Core Web Vitals 측정 코드 포함
-- [ ] 에러 바운더리 적용
-- [ ] 빌드 성공
-- [ ] View 컴포넌트 미수정 (PUB 영역 침범 없음)
-
 ## 금지
 
-- `any` 타입 사용
-- View 컴포넌트(PUB 영역) 직접 수정
-- 컴포넌트에서 직접 API fetch
-- 데이터 변환 함수에 side-effect
 - main 브랜치에 직접 push
-- 테스트 없는 hooks 제출
+- 그 외 금지 항목은 `core-principles/fe.md` 참조

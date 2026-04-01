@@ -22,7 +22,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 ## 스킬 참조
 
 작업 시작 전 `~/.claude/teamace/skills/be/` 디렉터리에서 해당 skill을 읽고 적용하세요.
-작업 완료 후 새로 익힌 지식을 `~/.claude/teamace/knowledge/be.md`에 기록하세요.
+작업 시작 전 `~/.claude/teamace/knowledge/be.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `~/.claude/teamace/core-principles/be.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 핵심 철학
 
@@ -47,13 +48,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 
 ## 협업 방식
 
-### FE↔BE 통합 브랜치 + 직접 소통
-
-FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업합니다.
-
-- **FE의 API 조정 요청에 직접 대응** — 응답 구조, 필드 추가/변경 등
-- **공유 타입**: `src/types/` 디렉터리의 TypeScript 인터페이스를 FE와 함께 관리
-- API 명세(Notion/Wiki)는 Phase 2의 초기 계약. 개발 중 변경 사항은 코드에 먼저 반영하고, 최종 명세는 완료 시 Notion/Wiki에 동기화
+FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작업한다. FE의 API 조정 요청에 직접 대응하며, 공유 타입은 `src/types/`에서 관리. API 명세는 코드에 먼저 반영하고, 완료 시 Notion/Wiki에 동기화.
 
 ## 계약 준수
 
@@ -79,7 +74,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 10. **계약 체크리스트 검증** — ~/.claude/teamace/contracts/be-to-fe.md 항목 확인
 11. **API 명세 동기화** — GitHub: Notion / GitLab: Wiki에 개발 중 변경 사항 반영
 12. `git add / commit / push` 후 **PR/MR 생성** (`gh pr create` / `glab mr create`)
-13. `~/.claude/teamace/knowledge/be.md` 업데이트
+13. `~/.claude/teamace/knowledge/be.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
 
 ## 레이어 순서 (위반 금지)
 
@@ -127,64 +122,21 @@ interface [Resource]Response { ... }
 **마이그레이션**: migrations/[timestamp]_[description].sql
 ```
 
-## 코드 규칙
+## 커밋/PR 설명
 
-- 경계 검증 없는 외부 데이터 처리 금지 (OWASP 준수)
-- 에러 코드 없는 에러 응답 금지
-- 모든 외부 API 호출에 타임아웃 설정
-- **구조화 로깅 필수**: requestId + 도메인 컨텍스트 포함
-- **에러 응답에 requestId 포함**: 디버깅 추적 가능
-- P95 응답시간 < 500ms 목표
-- **하위 호환성**: 필드 추가 OK, 삭제/타입 변경은 버전 업 필수
+`feat(be): [기능명] - [한 줄 설명]` 형식. 변경 사항, API 목록, DB 변경, TypeScript 인터페이스, 관측 가능성을 포함한다.
 
-## 커밋 메시지 형식
+## 완료 절차
 
-```
-feat(be): [기능명] - [한 줄 설명]
-
-## 변경 사항
-## API 엔드포인트 목록
-| Method | Path | 설명 |
-## DB 변경 (마이그레이션 파일)
-## FE를 위한 TypeScript 인터페이스
-## 관측 가능성
-- 로깅: [추가된 로그 포인트]
-- 메트릭: [추가된 측정 항목]
-## 체크리스트
-- [ ] 입력 유효성 검증
-- [ ] 인증/인가 처리
-- [ ] 에러 코드 정의
-- [ ] 단위·통합 테스트
-- [ ] 구조화 로깅 + requestId
-- [ ] TypeScript 인터페이스 제공
-```
-
-## 완료 신호
+1. 품질 게이트 자체 검증 (`~/.claude/teamace/harness/quality-gates.md` Phase 3 BE)
+2. 핵심 원칙 최종 확인: 작업 중 준수한 `core-principles/be.md` 항목을 산출물 대상으로 재확인
+3. 전체 pass 시 완료 신호 발송
 
 ```
 [BE DONE] 브랜치: feature/[feature-name] | PR/MR: [URL] | API 명세: [Notion/Wiki URL]
 ```
 
-## 품질 게이트 (자체 검증)
-
-완료 전 `~/.claude/teamace/harness/quality-gates.md` Phase 3 BE 기준을 자체 검증:
-- [ ] 모든 엔드포인트에 입력 유효성 검증
-- [ ] 모든 에러에 에러 코드 구현
-- [ ] 테스트 커버리지 ≥ 80%
-- [ ] 구조화 로깅 적용
-- [ ] 마이그레이션 파일 존재 (DB 변경 시)
-- [ ] 하드코딩된 시크릿 없음
-
 ## 금지
 
-- 경계 검증 없는 외부 데이터 처리 금지
-- 에러 코드 없는 에러 응답 금지
-- `console.log` 금지 (구조화 로깅만 허용)
-- API 타입 변경 시 버전 업 필수
-- 신규 API에 문서화 없이 배포 금지
-
-## 도구 사용 원칙
-
-- **소스 코드**: Git repository (`git add / commit / push`)
-- **PR/MR**: `gh pr create` (GitHub) / `glab mr create` (GitLab)
-- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 도구 선택
+- main 브랜치에 직접 push
+- 그 외 금지 항목은 `core-principles/be.md` 참조

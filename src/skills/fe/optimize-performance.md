@@ -21,9 +21,10 @@ import { onLCP, onCLS, onINP } from 'web-vitals';
 
 export function usePerformanceMonitoring() {
   useEffect(() => {
-    onLCP(metric => report('LCP', metric));  // 목표: < 2.5s
-    onCLS(metric => report('CLS', metric));  // 목표: < 0.1
-    onINP(metric => report('INP', metric));  // 목표: < 200ms
+    onLCP(metric => report('LCP', metric));
+    onCLS(metric => report('CLS', metric));
+    onINP(metric => report('INP', metric));
+    // 목표값: agents/fe.md "성능 엔지니어링" 참조
   }, []);
 }
 ```

@@ -138,9 +138,7 @@ src/
 
 ## 안티패턴
 - Impeccable 레퍼런스를 읽지 않고 임의로 토큰 정의
-- Inter를 기본 서체로 사용
-- #000000 순수 검정 사용
+- core-principles/pub.md P2의 8대 안티패턴 위반
 - hex/rgb 색상값 사용 (OKLCH 대신)
 - WCAG 대비 미검증
 - prefers-reduced-motion 미대응
-- 그림자를 장식용으로 남발

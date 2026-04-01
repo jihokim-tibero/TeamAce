@@ -55,7 +55,7 @@ info "디렉터리 구조 생성 중..."
 
 mkdir -p "$CLAUDE_DIR"
 mkdir -p "$AGENTS_DIR"
-mkdir -p "$TEAMACE_DIR"/{skills/{pm,pub,fe,be,qa},knowledge,contracts,harness,config}
+mkdir -p "$TEAMACE_DIR"/{skills/{pm,pub,fe,be,qa},knowledge,contracts,harness,core-principles,config}
 mkdir -p "$BIN_DIR"
 
 # ─────────────────────────────────────────────
@@ -94,6 +94,10 @@ ok "  → contracts 설치 완료"
 # Harness
 cp "$SCRIPT_DIR"/src/harness/*.md "$TEAMACE_DIR/harness/"
 ok "  → harness 설치 완료"
+
+# Core Principles
+cp "$SCRIPT_DIR"/src/core-principles/*.md "$TEAMACE_DIR/core-principles/"
+ok "  → core-principles 설치 완료"
 
 # Version marker
 echo "$VERSION" > "$TEAMACE_DIR/version"
@@ -209,6 +213,7 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo ""
 echo "  설치 위치:"
 echo "    에이전트 정의  → ~/.claude/agents/"
+echo "    핵심 원칙      → ~/.claude/teamace/core-principles/"
 echo "    지원 파일      → ~/.claude/teamace/"
 echo "    글로벌 지침    → ~/.claude/CLAUDE.md"
 echo "    CLI           → ~/.local/bin/teamace"
@@ -218,8 +223,4 @@ echo "    1. 프로젝트 디렉터리에서 'teamace init' 실행"
 echo "    2. Claude Code 시작 → TeamAce 자동 인식"
 echo ""
 echo "  사용법:"
-echo "    teamace init      — 현재 프로젝트에 Impeccable + 기본 설정 초기화"
-echo "    teamace status    — 설치 상태 확인"
-echo "    teamace update    — TeamAce 업데이트"
-echo "    teamace uninstall — TeamAce 제거"
-echo ""
+echo "    teamace init      — 현�

@@ -27,7 +27,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 ## 스킬 참조
 
 작업 시작 전 `~/.claude/teamace/skills/qa/` 디렉터리에서 해당 skill을 읽고 적용하세요.
-작업 완료 후 새로 익힌 지식을 `~/.claude/teamace/knowledge/qa.md`에 기록하세요.
+작업 시작 전 `~/.claude/teamace/knowledge/qa.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `~/.claude/teamace/core-principles/qa.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 핵심 철학
 
@@ -77,7 +78,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 10. **스냅샷 테스트 실행** (UI + API 응답)
 11. 버그 발견 시 **Git Issue 생성** (`gh issue create` / `glab issue create`)
 12. **품질 게이트 판정** (~/.claude/teamace/harness/quality-gates.md Phase 4)
-13. `~/.claude/teamace/knowledge/qa.md` 업데이트
+13. `~/.claude/teamace/knowledge/qa.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
 
 ## 테스트 시나리오 형식
 
@@ -158,28 +159,7 @@ npx playwright test tests/[feature].spec.ts
 npx playwright test --update-snapshots
 ```
 
-## 회귀 테스트 체크리스트
-
-변경이 있을 때마다:
-- [ ] 변경 영향 분석 완료 (영향받는 기능 목록)
-- [ ] 영향받는 기능의 기존 TC 선별 실행
-- [ ] 전체 회귀 스위트 실행
-- [ ] 스냅샷 테스트 실행 (diff 확인)
-- [ ] 기존 TC 100% 통과 확인
-- [ ] 새 TC를 회귀 스위트에 등록
-
-## 품질 게이트 기준
-
-| 게이트 | 기준 | 측정 방법 |
-|--------|------|-----------|
-| 단위 테스트 커버리지 | ≥ 80% | CI 리포트 |
-| API 응답 시간 | P95 < 500ms | 성능 테스트 |
-| 에러율 | < 0.1% | 테스트 중 에러 발생률 |
-| Critical TC 통과율 | 100% | 테스트 결과 |
-| 회귀 TC 통과율 | 100% | 회귀 스위트 결과 |
-| 접근성 | WCAG AA | 자동화 검사 |
-| E2E 테스트 | Critical Path 100% 통과 | Playwright 결과 |
-| 스냅샷 | 의도하지 않은 변경 없음 | diff 확인 |
+회귀 테스트 상세 정책은 `~/.claude/teamace/harness/regression-policy.md`, 품질 게이트 상세 기준은 `~/.claude/teamace/harness/quality-gates.md` Phase 4 참조.
 
 ## 버그 리포트 형식 (GitHub Issue)
 
@@ -214,23 +194,9 @@ npx playwright test --update-snapshots
 [QA DONE] TC: [N]개 (Critical: N, High: N) | Notion/Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
 ```
 
-## 품질 게이트 (자체 검증)
+## 완료 절차
 
-완료 전 `~/.claude/teamace/harness/quality-gates.md` Phase 4 기준을 자체 검증:
-- [ ] Critical TC 100% 통과
-- [ ] High TC ≥ 95% 통과
-- [ ] E2E 테스트 — Critical Path 100% 통과
-- [ ] 회귀 테스트 100% 통과
-- [ ] 스냅샷 테스트 — 의도하지 않은 변경 없음
-- [ ] P95 < 500ms
-- [ ] 접근성 WCAG AA 통과
-- [ ] 에러율 < 0.1%
+1. 품질 게이트 자체 검증 (`~/.claude/teamace/harness/quality-gates.md` Phase 4)
+2. 핵심 원칙 최종 확인: 작업 중 준수한 `core-principles/qa.md` 항목을 산출물 대상으로 재확인
+3. 전체 pass 시 완료 신호 발송
 
-## 도구 사용 원칙
-
-- **문서 산출물 저장**:
-  - GitHub 프로젝트 → **Notion** (Notion MCP) — 테스트 시나리오 등 모든 문서 산출물
-  - GitLab 프로젝트 → **Git Wiki** (`glab api`)
-- **Git Issue** → `gh issue` 또는 `glab issue` (버그 리포트)
-- **Notion** → `mcp__plugin_Notion_notion__*` (GitHub 프로젝트의 문서 산출물 + 중간 산출물)
-- **Git 플랫폼 감지**: `git remote -v`로 확인 후 적절한 도구 선택
