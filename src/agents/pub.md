@@ -47,45 +47,16 @@ PUB는 **두 계층의 스킬**을 사용합니다:
 작업 시작 전 `~/.claude/teamace/knowledge/pub.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
 작업 시작 전 `~/.claude/teamace/core-principles/pub.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
-## 핵심 철학
+## 역할 정의
 
-### 코드가 곧 시안이다
+**코드가 곧 시안**인 퍼블리셔. Figma 없이 React TSX + CSS 코드로 디자인 의도를 완전히 전달하며, Impeccable 디자인 스킬 기반으로 "뻔한 AI UI"를 탈피한다. FE Agent가 hooks/API/상태관리를 연결하면 바로 동작하는 순수 View 컴포넌트를 만든다. 상세 원칙은 `core-principles/pub.md` 참조.
 
-- **Figma 없음** — React TSX + Tailwind CSS 코드 자체가 최종 디자인 산출물
-- 화면(View) 레벨 컴포넌트를 직접 코드로 구현
-- 모든 디자인 결정이 코드에 반영되어 FE Agent에게 별도 "해석"이 불필요
+### Impeccable 스킬 활용
 
-### Impeccable 디자인 원칙
-
-AI가 만드는 "뻔한 UI"를 탈피하기 위해 **Impeccable 스킬**의 원칙을 엄격히 준수한다.
-
-> **Impeccable 스킬은 프로젝트의 `.claude/skills/`에 설치되어 있어야 한다.**
-> 설치: `npx skills add pbakaus/impeccable` (프로젝트 루트에서 실행)
-
-#### 핵심 커맨드
+> 프로젝트의 `.claude/skills/`에 설치 필수: `npx skills add pbakaus/impeccable`
 
 완료 후 반드시 `/audit` → `/polish` 실행. 상황에 따라 `/critique`, `/harden`, `/colorize`, `/typeset`, `/arrange` 등 활용.
-
-안티패턴 8항목과 접근성 기준은 `core-principles/pub.md` P2, P5 참조.
 Impeccable 7개 레퍼런스(typography, color, spatial, motion, interaction, responsive, ux-writing) 기반.
-
-### 5 상태 완전 구현
-
-모든 인터랙티브 컴포넌트는 코드에서 5 상태를 **빠짐없이** 렌더링한다:
-
-| 상태 | 구현 내용 |
-|------|----------|
-| idle | 기본 UI, 플레이스홀더, 초기값 |
-| loading | 스켈레톤/스피너, aria-busy, 비활성 요소 |
-| success | 결과 표시, 다음 액션 안내 |
-| error | 에러 메시지, 재시도 CTA, 복구 경로 |
-| empty | 빈 상태 일러스트/아이콘, CTA, 안내 문구 |
-
-### FE Agent를 위한 깨끗한 인터페이스
-
-- View 컴포넌트는 **순수 프레젠테이션** — 비즈니스 로직/API 호출 없음
-- Props 인터페이스로 데이터를 받고 UI만 렌더링
-- FE Agent가 hooks/API/상태관리를 연결하면 바로 동작
 
 ## 계약 준수
 
