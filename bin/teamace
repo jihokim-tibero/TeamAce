@@ -92,287 +92,988 @@ check_impeccable() {
 }
 
 # ─────────────────────────────────────────────
-# Toolchain 검사 — P0 도구 (TypeScript, ESLint, Husky+commitlint)
+# 버전 조회 + 스택 감지 + 로컬 Toolchain 설치
 # ─────────────────────────────────────────────
 
-# tsconfig.json 에서 strict: true 여부 확인
-# $1 = 프로젝트 디렉터리
-check_typescript_strict() {
-  local dir="$1"
-  local tsconfig="$dir/tsconfig.json"
-  [ -f "$tsconfig" ] || return 2  # tsconfig 자체가 없음
-  node -e "
-    const ts = JSON.parse(require('fs').readFileSync('$tsconfig','utf8'));
-    process.exit(ts.compilerOptions && ts.compilerOptions.strict === true ? 0 : 1);
-  " 2>/dev/null && return 0
-  return 1  # strict 가 false 이거나 없음
+# Maven Central에서 최신 릴리스 버전 조회 (네트워크 실패 시 기본값)
+# $1 = groupPath (e.g. "com/diffplug/spotless/spotless-plugin-gradle")
+# $2 = 기본값
+fetch_maven_latest() {
+  local group_path="$1"
+  local fallback="$2"
+  local ver
+  ver=$(curl -sL --max-time 5 \
+    "https://repo1.maven.org/maven2/$group_path/maven-metadata.xml" 2>/dev/null \
+    | grep '<release>' | head -1 | sed 's/.*<release>\(.*\)<\/release>.*/\1/')
+  echo "${ver:-$fallback}"
 }
 
-# ESLint 설정 파일 존재 + 핵심 규칙 확인
-# 반환: 0=설정+핵심규칙 OK, 1=설정 파일 없음, 2=설정 있으나 핵심 규칙 부족
-# $1 = 프로젝트 디렉터리
-check_eslint_setup() {
+# 프로젝트 스택 감지
+# stdout: "node" | "python" | "java-maven" | "java-gradle" | "unknown"
+detect_stack() {
   local dir="$1"
-  local config_file=""
-
-  # flat config or legacy config 찾기
-  for f in "$dir"/eslint.config.{js,mjs,cjs,ts} "$dir"/.eslintrc{,.js,.cjs,.json,.yml,.yaml}; do
-    [ -f "$f" ] && config_file="$f" && break
-  done
-
-  # package.json 내 eslintConfig 필드
-  if [ -z "$config_file" ] && [ -f "$dir/package.json" ]; then
-    node -e "
-      const p = JSON.parse(require('fs').readFileSync('$dir/package.json','utf8'));
-      process.exit(p.eslintConfig ? 0 : 1);
-    " 2>/dev/null && config_file="$dir/package.json"
+  if [ -f "$dir/package.json" ]; then echo "node"
+  elif [ -f "$dir/pyproject.toml" ] || [ -f "$dir/requirements.txt" ] || [ -f "$dir/setup.py" ] || [ -f "$dir/Pipfile" ]; then echo "python"
+  elif [ -f "$dir/pom.xml" ]; then echo "java-maven"
+  elif [ -f "$dir/build.gradle" ] || [ -f "$dir/build.gradle.kts" ]; then echo "java-gradle"
+  else echo "unknown"
   fi
-
-  [ -z "$config_file" ] && return 1  # 설정 파일 자체가 없음
-
-  # 핵심 규칙 존재 여부 확인: 설정 파일 + node_modules 에서 키워드 검색
-  # TeamAce P0 핵심 규칙: no-console, no-explicit-any
-  local missing_rules=()
-  if ! grep -rq "no-console" "$dir"/eslint.config.* "$dir"/.eslintrc* "$dir"/package.json 2>/dev/null; then
-    missing_rules+=("no-console")
-  fi
-  if ! grep -rq "no-explicit-any\|@typescript-eslint" "$dir"/eslint.config.* "$dir"/.eslintrc* "$dir"/package.json 2>/dev/null; then
-    missing_rules+=("@typescript-eslint/no-explicit-any")
-  fi
-
-  if [ ${#missing_rules[@]} -gt 0 ]; then
-    # 글로벌 변수로 누락 규칙 전달
-    ESLINT_MISSING_RULES="${missing_rules[*]}"
-    return 2  # 설정 있으나 핵심 규칙 부족
-  fi
-
-  ESLINT_MISSING_RULES=""
-  return 0
 }
 
-# Husky 설정 확인 — .husky/ 존재 + 훅 파일 내용 검사
-# 반환: 0=훅 정상, 1=디렉터리 없음, 2=디렉터리 있으나 훅 부족
-# $1 = 프로젝트 디렉터리
-check_husky_setup() {
+# ── Node 스택 로컬 설치 ──
+setup_toolchain_node() {
   local dir="$1"
-  [ -d "$dir/.husky" ] || return 1
-
-  local missing_hooks=()
-
-  # commit-msg 훅 존재 + commitlint 연동 확인
-  if [ -f "$dir/.husky/commit-msg" ]; then
-    grep -q "commitlint" "$dir/.husky/commit-msg" 2>/dev/null || missing_hooks+=("commit-msg→commitlint")
-  else
-    missing_hooks+=("commit-msg")
-  fi
-
-  # pre-push 훅 존재 + main 브랜치 차단 확인
-  if [ -f "$dir/.husky/pre-push" ]; then
-    grep -q "main" "$dir/.husky/pre-push" 2>/dev/null || missing_hooks+=("pre-push→main차단")
-  else
-    missing_hooks+=("pre-push")
-  fi
-
-  if [ ${#missing_hooks[@]} -gt 0 ]; then
-    HUSKY_MISSING_HOOKS="${missing_hooks[*]}"
-    return 2
-  fi
-
-  HUSKY_MISSING_HOOKS=""
-  return 0
-}
-
-# commitlint 설정 확인 — 설정 파일 존재 + extends 설정 여부
-# 반환: 0=정상, 1=설정 없음, 2=설정 있으나 extends 미설정
-# $1 = 프로젝트 디렉터리
-check_commitlint_setup() {
-  local dir="$1"
-  local config_file=""
-
-  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
-    [ -f "$f" ] && config_file="$f" && break
-  done
-
-  # package.json 내 commitlint 필드
-  if [ -z "$config_file" ] && [ -f "$dir/package.json" ]; then
-    node -e "
-      const p = JSON.parse(require('fs').readFileSync('$dir/package.json','utf8'));
-      process.exit(p.commitlint ? 0 : 1);
-    " 2>/dev/null && config_file="$dir/package.json"
-  fi
-
-  [ -z "$config_file" ] && return 1  # 설정 파일 자체가 없음
-
-  # extends 설정 확인 (config-conventional 등)
-  if ! grep -rq "extends\|config-conventional" "$config_file" 2>/dev/null; then
-    return 2  # 설정 있으나 extends 미설정
-  fi
-
-  return 0
-}
-
-# 단일 디렉터리에 대한 Toolchain 검사 실행 + 안내 출력
-# $1 = 프로젝트(또는 서브레포) 디렉터리, $2 = 라벨 (옵션)
-run_toolchain_check() {
-  local dir="$1"
-  local label="${2:-}"
-  local has_package_json=0
-  [ -f "$dir/package.json" ] && has_package_json=1
-
-  if [ "$has_package_json" -eq 0 ]; then
-    return  # Node 프로젝트가 아니면 검사 스킵
-  fi
-
-  [ -n "$label" ] && info "─── ${label} 도구 검사 ───"
-
-  local missing_items=()
+  local need_install=0
 
   # 1) TypeScript strict
-  local ts_result
-  check_typescript_strict "$dir" && ts_result="ok" || ts_result=$?
-  if [ "$ts_result" = "ok" ]; then
-    ok "  → TypeScript strict: 활성화됨"
-  elif [ "$ts_result" = "2" ]; then
-    warn "  → TypeScript strict: tsconfig.json 없음"
-    missing_items+=("typescript")
+  if [ -f "$dir/tsconfig.json" ]; then
+    if node -e "
+      const c=require('fs').readFileSync('$dir/tsconfig.json','utf8').replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/,\s*([}\]])/g,'$1');
+      const t=JSON.parse(c);process.exit(t.compilerOptions&&t.compilerOptions.strict===true?0:1);
+    " 2>/dev/null; then
+      ok "    → TypeScript strict: 이미 활성화됨"
+    else
+      if node -e "
+        const fs=require('fs');
+        const c=fs.readFileSync('$dir/tsconfig.json','utf8').replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/,\s*([}\]])/g,'$1');
+        const t=JSON.parse(c);
+        if(!t.compilerOptions)t.compilerOptions={};
+        t.compilerOptions.strict=true;
+        fs.writeFileSync('$dir/tsconfig.json',JSON.stringify(t,null,2)+'\n');
+      " 2>/dev/null; then
+        ok "    → TypeScript strict: 활성화 완료"
+      else
+        warn "    → TypeScript strict: 수동 설정 필요 (compilerOptions.strict = true)"
+      fi
+    fi
   else
-    warn "  → TypeScript strict: 비활성 상태"
-    missing_items+=("typescript-strict")
+    # tsconfig.json이 없으면 생성
+    cat > "$dir/tsconfig.json" << 'TSEOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}
+TSEOF
+    ok "    → TypeScript: tsconfig.json 생성 완료 (strict: true)"
+    need_install=1
   fi
 
   # 2) ESLint
-  local eslint_result
-  ESLINT_MISSING_RULES=""
-  check_eslint_setup "$dir" && eslint_result="ok" || eslint_result=$?
-  if [ "$eslint_result" = "ok" ]; then
-    ok "  → ESLint: 핵심 규칙 적용됨"
-  elif [ "$eslint_result" = "2" ]; then
-    warn "  → ESLint: 설정은 있으나 누락 규칙 — ${ESLINT_MISSING_RULES}"
-    missing_items+=("eslint-rules")
+  local has_eslint=0
+  for f in "$dir"/eslint.config.{js,mjs,cjs,ts} "$dir"/.eslintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && has_eslint=1 && break
+  done
+  if [ "$has_eslint" -eq 1 ]; then
+    ok "    → ESLint: 설정 이미 존재"
   else
-    warn "  → ESLint: 설정 파일 없음"
-    missing_items+=("eslint")
+    cat > "$dir/eslint.config.mjs" << 'ESLINTEOF'
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import globals from "globals";
+
+export default [
+  { ignores: ["dist/**", "build/**", "node_modules/**"] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.es2021 },
+    },
+    rules: {
+      "no-console": "error",
+      "max-lines": ["warn", 300],
+      "max-lines-per-function": ["warn", { max: 100 }],
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      camelcase: ["error", { properties: "always" }],
+    },
+  },
+  {
+    files: ["vite.config.*", "*.config.{js,ts,mjs,cjs}"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+];
+ESLINTEOF
+    ok "    → ESLint: eslint.config.mjs 생성 완료"
+    need_install=1
   fi
 
-  # 3) Husky
-  local husky_result
-  HUSKY_MISSING_HOOKS=""
-  check_husky_setup "$dir" && husky_result="ok" || husky_result=$?
-  if [ "$husky_result" = "ok" ]; then
-    ok "  → Husky: 훅 정상 (commit-msg, pre-push)"
-  elif [ "$husky_result" = "2" ]; then
-    warn "  → Husky: 디렉터리 있으나 훅 부족 — ${HUSKY_MISSING_HOOKS}"
-    missing_items+=("husky-hooks")
+  # 3) Husky hooks
+  mkdir -p "$dir/.husky"
+  local husky_changed=0
+
+  if [ ! -f "$dir/.husky/commit-msg" ]; then
+    printf 'npx --no -- commitlint --edit "$1"\n' > "$dir/.husky/commit-msg"
+    chmod +x "$dir/.husky/commit-msg"
+    husky_changed=1
+  fi
+
+  if [ ! -f "$dir/.husky/pre-push" ]; then
+    cat > "$dir/.husky/pre-push" << 'HOOKEOF'
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" = "main" ]; then
+  echo "main 브랜치에 직접 push할 수 없습니다."
+  exit 1
+fi
+HOOKEOF
+    chmod +x "$dir/.husky/pre-push"
+    husky_changed=1
+  fi
+
+  # Config Guard + Lint 실행
+  if [ ! -f "$dir/.husky/pre-commit" ]; then
+    cat > "$dir/.husky/pre-commit" << 'HOOKEOF'
+#!/usr/bin/env bash
+# TeamAce pre-commit — Config Guard + Lint + Type Check
+failed=0
+
+# ── Config Guard: 핵심 설정 변경 차단 ──
+if [ -f tsconfig.json ]; then
+  if ! node -e "
+    const c=require('fs').readFileSync('tsconfig.json','utf8').replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/,\s*([}\]])/g,'\$1');
+    const t=JSON.parse(c);process.exit(t.compilerOptions&&t.compilerOptions.strict===true?0:1);
+  " 2>/dev/null; then
+    echo "[Config Guard] tsconfig.json: strict 모드가 비활성화되어 있습니다."
+    failed=1
+  fi
+fi
+
+for cfg in eslint.config.*; do
+  [ -f "$cfg" ] || continue
+  if ! grep -q "no-console" "$cfg" 2>/dev/null; then
+    echo "[Config Guard] ESLint: no-console 규칙이 제거되었습니다."
+    failed=1
+  fi
+  if ! grep -q "no-explicit-any" "$cfg" 2>/dev/null; then
+    echo "[Config Guard] ESLint: no-explicit-any 규칙이 제거되었습니다."
+    failed=1
+  fi
+  break
+done
+
+[ "$failed" -eq 1 ] && exit 1
+
+# ── ESLint 실행 (워닝도 에러 처리) ──
+if command -v npx >/dev/null 2>&1 && [ -f node_modules/.bin/eslint ]; then
+  echo "[pre-commit] ESLint 검사 중..."
+  npx eslint . --max-warnings 0 || exit 1
+fi
+
+# ── TypeScript 타입 체크 ──
+if [ -f tsconfig.json ] && [ -f node_modules/.bin/tsc ]; then
+  echo "[pre-commit] TypeScript 타입 검사 중..."
+  npx tsc --noEmit || exit 1
+fi
+HOOKEOF
+    chmod +x "$dir/.husky/pre-commit"
+    husky_changed=1
+  fi
+
+  if [ "$husky_changed" -eq 1 ]; then
+    ok "    → Husky: 훅 생성 완료 (pre-commit, commit-msg, pre-push)"
+    need_install=1
   else
-    warn "  → Husky: 미설치"
-    missing_items+=("husky")
+    ok "    → Husky: 이미 설정됨"
   fi
 
   # 4) commitlint
-  local commitlint_result
-  check_commitlint_setup "$dir" && commitlint_result="ok" || commitlint_result=$?
-  if [ "$commitlint_result" = "ok" ]; then
-    ok "  → commitlint: 설정 정상"
-  elif [ "$commitlint_result" = "2" ]; then
-    warn "  → commitlint: 설정 파일은 있으나 extends 미설정"
-    missing_items+=("commitlint-extends")
+  local has_commitlint=0
+  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && has_commitlint=1 && break
+  done
+  if [ "$has_commitlint" -eq 1 ]; then
+    ok "    → commitlint: 설정 이미 존재"
   else
-    warn "  → commitlint: 설정 파일 없음"
-    missing_items+=("commitlint")
+    echo "export default { extends: ['@commitlint/config-conventional'] };" > "$dir/commitlint.config.mjs"
+    ok "    → commitlint: commitlint.config.mjs 생성 완료"
+    need_install=1
   fi
 
-  # 누락 항목이 있으면 설정 가이드 출력
-  if [ ${#missing_items[@]} -gt 0 ]; then
-    echo ""
-    echo -e "  ${YELLOW}📋 설정 가이드${NC} (${dir##*/})"
-    echo ""
+  # 5) npm install
+  if [ "$need_install" -eq 1 ]; then
+    info "    npm 패키지 설치 중..."
+    if (cd "$dir" && npm install -D \
+      eslint @eslint/js typescript-eslint globals \
+      husky @commitlint/cli @commitlint/config-conventional \
+      >/dev/null 2>&1); then
+      ok "    → 패키지 설치 완료"
+      (cd "$dir" && npx husky >/dev/null 2>&1) || true
+    else
+      warn "    → 패키지 설치 실패 — 수동 실행:"
+      echo "      cd $dir && npm install -D eslint @eslint/js typescript-eslint globals husky @commitlint/cli @commitlint/config-conventional"
+    fi
+  fi
+}
 
-    for item in "${missing_items[@]}"; do
-      case "$item" in
-        typescript)
-          echo -e "  ${BOLD}[TypeScript]${NC} 설치 및 strict 모드 활성화:"
-          echo "    npm install -D typescript"
-          echo "    npx tsc --init  # 생성 후 strict: true 확인"
-          echo ""
-          ;;
-        typescript-strict)
-          echo -e "  ${BOLD}[TypeScript strict]${NC} tsconfig.json 수정:"
-          echo "    compilerOptions.strict = true"
-          echo "    compilerOptions.noImplicitAny = true"
-          echo ""
-          ;;
-        eslint)
-          echo -e "  ${BOLD}[ESLint]${NC} 설치 및 설정:"
-          echo "    npm install -D eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser"
-          echo "    # eslint.config.mjs 를 생성하고 아래 규칙 추가:"
-          echo "    #   no-console: error"
-          echo "    #   max-lines: [warn, 300]"
-          echo "    #   max-lines-per-function: [warn, { max: 50 }]"
-          echo "    #   @typescript-eslint/no-explicit-any: error"
-          echo "    #   camelcase: [error, { properties: always }]"
-          echo "    #   no-magic-numbers: [warn, { ignore: [0, 1, -1] }]"
-          echo ""
-          ;;
-        eslint-rules)
-          echo -e "  ${BOLD}[ESLint 규칙 보완]${NC} 다음 규칙을 ESLint 설정에 추가하세요:"
-          for rule in $ESLINT_MISSING_RULES; do
-            echo "    - $rule"
-          done
-          echo "    # 권장 전체 규칙:"
-          echo "    #   no-console: error"
-          echo "    #   max-lines: [warn, 300]"
-          echo "    #   max-lines-per-function: [warn, { max: 50 }]"
-          echo "    #   @typescript-eslint/no-explicit-any: error"
-          echo "    #   camelcase: [error, { properties: always }]"
-          echo "    #   no-magic-numbers: [warn, { ignore: [0, 1, -1] }]"
-          echo ""
-          ;;
-        husky)
-          echo -e "  ${BOLD}[Husky]${NC} 설치:"
-          echo "    npm install -D husky"
-          echo "    npx husky init"
-          echo "    # .husky/commit-msg 훅 생성 (commitlint 연동):"
-          echo '    echo "npx --no -- commitlint --edit \$1" > .husky/commit-msg'
-          echo "    # .husky/pre-push 훅 생성 (main 브랜치 푸시 차단):"
-          echo '    cat > .husky/pre-push << '\''HOOK'\'''
-          echo '    branch=$(git rev-parse --abbrev-ref HEAD)'
-          echo '    if [ "$branch" = "main" ]; then echo "main 직접 push 금지"; exit 1; fi'
-          echo '    HOOK'
-          echo ""
-          ;;
-        husky-hooks)
-          echo -e "  ${BOLD}[Husky 훅 보완]${NC} 누락된 훅을 추가하세요:"
-          for hook in $HUSKY_MISSING_HOOKS; do
-            case "$hook" in
-              commit-msg*)
-                echo "    # .husky/commit-msg 훅 생성:"
-                echo '    echo "npx --no -- commitlint --edit \$1" > .husky/commit-msg'
-                ;;
-              pre-push*)
-                echo "    # .husky/pre-push 훅 생성 (main 브랜치 푸시 차단):"
-                echo '    cat > .husky/pre-push << '\''HOOK'\'''
-                echo '    branch=$(git rev-parse --abbrev-ref HEAD)'
-                echo '    if [ "$branch" = "main" ]; then echo "main 직접 push 금지"; exit 1; fi'
-                echo '    HOOK'
-                ;;
-            esac
-          done
-          echo ""
-          ;;
-        commitlint)
-          echo -e "  ${BOLD}[commitlint]${NC} 설치 및 설정:"
-          echo "    npm install -D @commitlint/cli @commitlint/config-conventional"
-          echo "    echo \"export default { extends: ['@commitlint/config-conventional'] };\" > commitlint.config.mjs"
-          echo ""
-          ;;
-        commitlint-extends)
-          echo -e "  ${BOLD}[commitlint extends]${NC} 설정 파일에 extends를 추가하세요:"
-          echo "    export default { extends: ['@commitlint/config-conventional'] };"
-          echo ""
-          ;;
-      esac
+# ── Python 스택 로컬 설치 ──
+setup_toolchain_python() {
+  local dir="$1"
+  local need_install=0
+
+  # 1) Ruff 설정
+  if [ -f "$dir/ruff.toml" ]; then
+    ok "    → Ruff: 설정 이미 존재 (ruff.toml)"
+  elif [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.ruff\]" "$dir/pyproject.toml" 2>/dev/null; then
+    ok "    → Ruff: 설정 이미 존재 (pyproject.toml)"
+  else
+    if [ -f "$dir/pyproject.toml" ]; then
+      cat >> "$dir/pyproject.toml" << 'RUFFEOF'
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+RUFFEOF
+      ok "    → Ruff: pyproject.toml에 설정 추가"
+    else
+      cat > "$dir/ruff.toml" << 'RUFFEOF'
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
+
+[format]
+quote-style = "double"
+RUFFEOF
+      ok "    → Ruff: ruff.toml 생성 완료"
+    fi
+    need_install=1
+  fi
+
+  # 2) mypy 설정
+  if [ -f "$dir/mypy.ini" ] || [ -f "$dir/.mypy.ini" ]; then
+    ok "    → mypy: 설정 이미 존재"
+  elif [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.mypy\]" "$dir/pyproject.toml" 2>/dev/null; then
+    ok "    → mypy: 설정 이미 존재 (pyproject.toml)"
+  else
+    if [ -f "$dir/pyproject.toml" ]; then
+      cat >> "$dir/pyproject.toml" << 'MYPYEOF'
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+MYPYEOF
+      ok "    → mypy: pyproject.toml에 strict 설정 추가"
+    else
+      cat > "$dir/mypy.ini" << 'MYPYEOF'
+[mypy]
+strict = True
+python_version = 3.11
+warn_return_any = True
+warn_unused_configs = True
+ignore_missing_imports = True
+MYPYEOF
+      ok "    → mypy: mypy.ini 생성 완료"
+    fi
+    need_install=1
+  fi
+
+  # 3) pre-commit
+  if [ -f "$dir/.pre-commit-config.yaml" ]; then
+    ok "    → pre-commit: 설정 이미 존재"
+  else
+    cat > "$dir/.pre-commit-config.yaml" << 'PCEOF'
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.0.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.0.0
+    hooks:
+      - id: mypy
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v0.0.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+  - repo: local
+    hooks:
+      - id: config-guard
+        name: TeamAce Config Guard
+        entry: bash -c 'failed=0; if [ -f pyproject.toml ] && ! grep -q "strict\s*=\s*true\|strict\s*=\s*True" pyproject.toml 2>/dev/null; then echo "[Config Guard] mypy strict 모드가 비활성화되어 있습니다."; failed=1; fi; if [ -f mypy.ini ] && ! grep -q "strict\s*=\s*True" mypy.ini 2>/dev/null; then echo "[Config Guard] mypy strict 모드가 비활성화되어 있습니다."; failed=1; fi; exit $failed'
+        language: system
+        always_run: true
+        pass_filenames: false
+PCEOF
+    ok "    → pre-commit: .pre-commit-config.yaml 생성 완료"
+    need_install=1
+  fi
+
+  # 4) commitlint (pre-commit 훅에서 사용)
+  local has_commitlint=0
+  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && has_commitlint=1 && break
+  done
+  if [ "$has_commitlint" -eq 1 ]; then
+    ok "    → commitlint: 설정 이미 존재"
+  else
+    echo "export default { extends: ['@commitlint/config-conventional'] };" > "$dir/commitlint.config.mjs"
+    ok "    → commitlint: commitlint.config.mjs 생성 완료"
+    need_install=1
+  fi
+
+  # 5) 패키지 설치 + 버전 최신화
+  if [ "$need_install" -eq 1 ]; then
+    info "    패키지 설치 중..."
+    local pip_cmd="pip3"
+    command -v pip3 >/dev/null 2>&1 || pip_cmd="pip"
+
+    if ($pip_cmd install ruff mypy pre-commit >/dev/null 2>&1); then
+      ok "    → pip 패키지 설치 완료 (ruff, mypy, pre-commit)"
+    else
+      warn "    → pip 설치 실패 — 수동 실행: $pip_cmd install ruff mypy pre-commit"
+    fi
+  fi
+
+  # 6) pre-commit autoupdate (설정이 있으면 항상 최신화 시도)
+  if [ -f "$dir/.pre-commit-config.yaml" ] && command -v pre-commit >/dev/null 2>&1; then
+    info "    pre-commit 훅 버전 최신화 중..."
+    if (cd "$dir" && pre-commit autoupdate >/dev/null 2>&1); then
+      ok "    → pre-commit autoupdate 완료"
+    else
+      warn "    → pre-commit autoupdate 실패 (네트워크 확인)"
+    fi
+
+    if (cd "$dir" && pre-commit install >/dev/null 2>&1 && pre-commit install --hook-type commit-msg >/dev/null 2>&1); then
+      ok "    → pre-commit 훅 설치 완료"
+    else
+      warn "    → pre-commit 훅 설치 실패 — 수동 실행: cd $dir && pre-commit install && pre-commit install --hook-type commit-msg"
+    fi
+  fi
+}
+
+# ── Java 스택 로컬 설치 ──
+setup_toolchain_java() {
+  local dir="$1"
+  local build_tool="$2"  # "maven" or "gradle"
+  local need_setup=0
+
+  # 1) Checkstyle 설정
+  if [ -f "$dir/checkstyle.xml" ] || [ -f "$dir/config/checkstyle/checkstyle.xml" ]; then
+    ok "    → Checkstyle: 설정 이미 존재"
+  else
+    mkdir -p "$dir/config/checkstyle"
+    cat > "$dir/config/checkstyle/checkstyle.xml" << 'CSEOF'
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+  "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+  "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<module name="Checker">
+  <module name="TreeWalker">
+    <module name="ConstantName"/>
+    <module name="LocalVariableName"/>
+    <module name="MemberName"/>
+    <module name="MethodName"/>
+    <module name="PackageName"/>
+    <module name="ParameterName"/>
+    <module name="TypeName"/>
+    <module name="AvoidStarImport"/>
+    <module name="UnusedImports"/>
+    <module name="NeedBraces"/>
+    <module name="LeftCurly"/>
+    <module name="RightCurly"/>
+    <module name="WhitespaceAround">
+      <property name="allowEmptyTypes" value="true"/>
+      <property name="allowEmptyConstructors" value="true"/>
+      <property name="allowEmptyMethods" value="true"/>
+      <property name="allowEmptyLambdas" value="true"/>
+    </module>
+    <module name="EmptyBlock"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="FallThrough"/>
+    <module name="UpperEll"/>
+  </module>
+  <module name="FileLength">
+    <property name="max" value="700"/>
+  </module>
+  <module name="NewlineAtEndOfFile"/>
+</module>
+CSEOF
+    ok "    → Checkstyle: config/checkstyle/checkstyle.xml 생성 완료"
+    need_setup=1
+  fi
+
+  # 2) Git hooks (.githooks/ — 외부 도구 의존 없이 동작)
+  local hooks_dir="$dir/.githooks"
+  mkdir -p "$hooks_dir"
+  local hooks_changed=0
+
+  if [ ! -f "$hooks_dir/commit-msg" ]; then
+    cat > "$hooks_dir/commit-msg" << 'HOOKEOF'
+#!/usr/bin/env bash
+commit_msg=$(cat "$1")
+pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,}"
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+  echo "커밋 메시지가 Conventional Commits 형식이 아닙니다."
+  echo "형식: <type>(<scope>): <description>"
+  echo "예시: feat(auth): 로그인 API 추가"
+  exit 1
+fi
+HOOKEOF
+    chmod +x "$hooks_dir/commit-msg"
+    hooks_changed=1
+  fi
+
+  if [ ! -f "$hooks_dir/pre-push" ]; then
+    cat > "$hooks_dir/pre-push" << 'HOOKEOF'
+#!/usr/bin/env bash
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" = "main" ]; then
+  echo "main 브랜치에 직접 push할 수 없습니다."
+  exit 1
+fi
+HOOKEOF
+    chmod +x "$hooks_dir/pre-push"
+    hooks_changed=1
+  fi
+
+  # Config Guard + Lint 실행
+  if [ ! -f "$hooks_dir/pre-commit" ]; then
+    cat > "$hooks_dir/pre-commit" << 'HOOKEOF'
+#!/usr/bin/env bash
+# TeamAce pre-commit — Config Guard + Checkstyle + Spotless
+
+# ── Config Guard ──
+if [ ! -f config/checkstyle/checkstyle.xml ] && [ ! -f checkstyle.xml ]; then
+  echo "[Config Guard] checkstyle.xml이 삭제되었습니다."
+  exit 1
+fi
+
+# ── Gradle 프로젝트: checkstyle + spotless 실행 ──
+if [ -f gradlew ]; then
+  echo "[pre-commit] Checkstyle 검사 중..."
+  ./gradlew checkstyleMain --quiet 2>&1 || exit 1
+
+  echo "[pre-commit] Spotless 포맷 검사 중..."
+  ./gradlew spotlessCheck --quiet 2>&1 || exit 1
+fi
+
+# ── Maven 프로젝트: checkstyle 실행 ──
+if [ -f mvnw ] || [ -f pom.xml ]; then
+  local mvn_cmd="mvn"
+  [ -f mvnw ] && mvn_cmd="./mvnw"
+  echo "[pre-commit] Checkstyle 검사 중..."
+  $mvn_cmd checkstyle:check -q 2>&1 || exit 1
+fi
+HOOKEOF
+    chmod +x "$hooks_dir/pre-commit"
+    hooks_changed=1
+  fi
+
+  if [ "$hooks_changed" -eq 1 ]; then
+    ok "    → Git hooks: .githooks/ 생성 완료 (pre-commit, commit-msg, pre-push)"
+    need_setup=1
+  else
+    ok "    → Git hooks: 이미 설정됨"
+  fi
+
+  # 3) core.hooksPath 설정
+  if [ "$need_setup" -eq 1 ]; then
+    if (cd "$dir" && git config core.hooksPath .githooks 2>/dev/null); then
+      ok "    → git core.hooksPath → .githooks 설정 완료"
+    else
+      warn "    → git 설정 실패 — 수동 실행: cd $dir && git config core.hooksPath .githooks"
+    fi
+  fi
+
+  # 4) 빌드 도구 플러그인 안내 (미설정 시에만, 버전은 동적 조회)
+  if [ "$build_tool" = "maven" ]; then
+    if ! grep -q "checkstyle\|spotless" "$dir/pom.xml" 2>/dev/null; then
+      local cs_plugin_ver
+      cs_plugin_ver=$(fetch_maven_latest "org/apache/maven/plugins/maven-checkstyle-plugin" "3.6.0")
+      echo ""
+      info "    [Maven] pom.xml <plugins> 블록에 다음을 추가하세요:"
+      echo ""
+      echo "      <plugin>"
+      echo "        <groupId>org.apache.maven.plugins</groupId>"
+      echo "        <artifactId>maven-checkstyle-plugin</artifactId>"
+      echo "        <version>${cs_plugin_ver}</version>"
+      echo "        <configuration>"
+      echo "          <configLocation>config/checkstyle/checkstyle.xml</configLocation>"
+      echo "        </configuration>"
+      echo "      </plugin>"
+      echo ""
+    else
+      ok "    → Maven 빌드 플러그인: 이미 설정됨"
+    fi
+  else
+    local gf=""
+    [ -f "$dir/build.gradle" ] && gf="$dir/build.gradle"
+    [ -f "$dir/build.gradle.kts" ] && gf="$dir/build.gradle.kts"
+    if [ -n "$gf" ] && grep -q "checkstyle\|spotless" "$gf" 2>/dev/null; then
+      ok "    → Gradle 빌드 플러그인: 이미 설정됨"
+    else
+      local spotless_ver gjf_ver
+      spotless_ver=$(fetch_maven_latest "com/diffplug/spotless/spotless-plugin-gradle" "8.4.0")
+      gjf_ver=$(fetch_maven_latest "com/google/googlejavaformat/google-java-format" "1.35.0")
+      echo ""
+      info "    [Gradle] plugins 블록에 다음을 추가하세요:"
+      echo ""
+      echo "      // plugins 블록에 추가:"
+      echo "      id 'checkstyle'"
+      echo "      id 'com.diffplug.spotless' version '${spotless_ver}'"
+      echo ""
+      echo "      // plugins 블록 밖에 추가:"
+      echo "      checkstyle {"
+      echo "          configFile = file('config/checkstyle/checkstyle.xml')"
+      echo "      }"
+      echo ""
+      echo "      spotless {"
+      echo "          java {"
+      echo "              googleJavaFormat('${gjf_ver}')"
+      echo "          }"
+      echo "      }"
+      echo ""
+    fi
+  fi
+}
+
+# ── 하위 모듈 탐색 (루트 제외, 최대 깊이 3) ──
+# node_modules, .git, build, dist, vendor, target 등 제외
+# stdout: 모듈 디렉터리 절대 경로 (한 줄에 하나, 중복 제거)
+find_modules() {
+  local root="$1"
+  find "$root" -maxdepth 3 -mindepth 2 \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.git/*' \
+    -not -path '*/vendor/*' \
+    -not -path '*/build/*' \
+    -not -path '*/dist/*' \
+    -not -path '*/.gradle/*' \
+    -not -path '*/target/*' \
+    -not -path '*/.claude/*' \
+    \( -name 'package.json' \
+       -o -name 'pyproject.toml' \
+       -o -name 'requirements.txt' \
+       -o -name 'setup.py' \
+       -o -name 'Pipfile' \
+       -o -name 'pom.xml' \
+       -o -name 'build.gradle' \
+       -o -name 'build.gradle.kts' \
+    \) 2>/dev/null | while IFS= read -r f; do
+    dirname "$f"
+  done | sort -u
+}
+
+# 단일 모듈에 스택별 도구 설치 (내부용)
+_run_setup() {
+  local mod_dir="$1"
+  local mod_label="$2"
+  local mod_stack
+  mod_stack=$(detect_stack "$mod_dir")
+  [ "$mod_stack" = "unknown" ] && return 0
+
+  echo ""
+  info "─── ${mod_label} (${mod_stack}) ───"
+
+  case "$mod_stack" in
+    node)        setup_toolchain_node "$mod_dir" ;;
+    python)      setup_toolchain_python "$mod_dir" ;;
+    java-maven)  setup_toolchain_java "$mod_dir" "maven" ;;
+    java-gradle) setup_toolchain_java "$mod_dir" "gradle" ;;
+  esac
+}
+
+# ── 디렉터리 Toolchain 설치 (스택 자동 감지 + 하위 모듈 재귀 탐색) ──
+setup_toolchain() {
+  local dir="$1"
+  local label="${2:-}"
+  local stack
+  stack=$(detect_stack "$dir")
+
+  # 하위 모듈 탐색
+  local -a modules=()
+  while IFS= read -r mod; do
+    [ -n "$mod" ] && modules+=("$mod")
+  done < <(find_modules "$dir")
+
+  if [ ${#modules[@]} -gt 0 ]; then
+    # 하위 모듈 발견 → 각 모듈별로 설치
+    for mod in "${modules[@]}"; do
+      local rel="${mod#$dir/}"
+      _run_setup "$mod" "$rel"
     done
+  elif [ "$stack" != "unknown" ]; then
+    # 루트에만 스택 존재
+    if [ -n "$label" ]; then
+      _run_setup "$dir" "$label"
+    else
+      info "  스택 감지: ${stack}"
+      case "$stack" in
+        node)        setup_toolchain_node "$dir" ;;
+        python)      setup_toolchain_python "$dir" ;;
+        java-maven)  setup_toolchain_java "$dir" "maven" ;;
+        java-gradle) setup_toolchain_java "$dir" "gradle" ;;
+      esac
+    fi
+  else
+    [ -n "$label" ] && info "  ${label}: 지원 스택 감지 안 됨 (건너뜀)"
+    info "  지원 스택 없음 (node/python/java)"
   fi
+}
+
+# 단일 모듈 상태 표시 (내부용)
+_show_module_status() {
+  local dir="$1"
+  local label="$2"
+  local stack
+  stack=$(detect_stack "$dir")
+  [ "$stack" = "unknown" ] && return 0
+
+  echo -e "  ${BOLD}${label}${NC} (${stack})"
+
+  case "$stack" in
+    node)
+      local has=0
+      for f in "$dir"/eslint.config.{js,mjs,cjs,ts} "$dir"/.eslintrc{,.js,.cjs,.json,.yml,.yaml}; do
+        [ -f "$f" ] && has=1 && break
+      done
+      if [ "$has" -eq 1 ]; then
+        local eslint_ver
+        eslint_ver=$(node -e "try{console.log(require('$dir/node_modules/eslint/package.json').version)}catch(e){}" 2>/dev/null)
+        [ -n "$eslint_ver" ] && echo -e "    ESLint:      ${GREEN}${eslint_ver}${NC}" || echo -e "    ESLint:      ${GREEN}설정됨${NC}"
+      else
+        echo -e "    ESLint:      ${YELLOW}없음${NC}"
+      fi
+
+      if [ -f "$dir/tsconfig.json" ]; then
+        if node -e "const c=require('fs').readFileSync('$dir/tsconfig.json','utf8').replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/,\s*([}\]])/g,'\$1');const t=JSON.parse(c);process.exit(t.compilerOptions&&t.compilerOptions.strict===true?0:1)" 2>/dev/null; then
+          echo -e "    TypeScript:  ${GREEN}strict${NC}"
+        else
+          echo -e "    TypeScript:  ${YELLOW}strict 아님${NC}"
+        fi
+      else
+        echo -e "    TypeScript:  ${YELLOW}tsconfig 없음${NC}"
+      fi
+
+      [ -d "$dir/.husky" ] && echo -e "    Husky:       ${GREEN}설정됨${NC}" || echo -e "    Husky:       ${YELLOW}없음${NC}"
+
+      has=0
+      for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
+        [ -f "$f" ] && has=1 && break
+      done
+      [ "$has" -eq 1 ] && echo -e "    commitlint:  ${GREEN}설정됨${NC}" || echo -e "    commitlint:  ${YELLOW}없음${NC}"
+
+      # 기대 설정 비교
+      local diff_count=0
+      echo -e "    ${BOLD}── 설정 비교 ──${NC}"
+
+      # tsconfig compilerOptions
+      if [ -f "$dir/tsconfig.json" ]; then
+        local ts_diffs
+        ts_diffs=$(node -e "
+          const c=require('fs').readFileSync('$dir/tsconfig.json','utf8').replace(/\/\/.*/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/,\s*([}\]])/g,'\$1');
+          const t=JSON.parse(c);const co=t.compilerOptions||{};
+          const expect={strict:true,esModuleInterop:true,skipLibCheck:true,forceConsistentCasingInFileNames:true};
+          for(const[k,v]of Object.entries(expect)){
+            const cur=co[k];
+            if(cur!==v)console.log('tsconfig '+k+'|'+JSON.stringify(cur)+'|'+v);
+          }
+          for(const k of['noImplicitAny','strictNullChecks','strictFunctionTypes','strictBindCallApply','noImplicitThis']){
+            if(co[k]===false)console.log('tsconfig '+k+'|false|strict에 의해 true');
+          }
+        " 2>/dev/null)
+        if [ -n "$ts_diffs" ]; then
+          while IFS='|' read -r item cur expect; do
+            echo -e "      ${RED}${item}${NC}: ${cur:-없음} (기대: ${expect})"
+            diff_count=$((diff_count+1))
+          done <<< "$ts_diffs"
+        fi
+      fi
+
+      # ESLint 규칙
+      local eslint_cfg=""
+      for f in "$dir"/eslint.config.{js,mjs,cjs,ts}; do
+        [ -f "$f" ] && eslint_cfg="$f" && break
+      done
+      if [ -n "$eslint_cfg" ]; then
+        local -A eslint_expect=(
+          ["no-console"]="error"
+          ["no-explicit-any"]="error"
+          ["no-unused-vars"]="error"
+          ["camelcase"]="error"
+          ["max-lines"]="warn"
+          ["max-lines-per-function"]="warn"
+        )
+        for rule in "${!eslint_expect[@]}"; do
+          local exp="${eslint_expect[$rule]}"
+          if ! grep -q "$rule" "$eslint_cfg" 2>/dev/null; then
+            echo -e "      ${RED}eslint ${rule}${NC}: 없음 (기대: ${exp})"
+            diff_count=$((diff_count+1))
+          elif grep -qE "['\"]${rule}['\"].*['\"]off['\"]|['\"]${rule}['\"].*:\s*0" "$eslint_cfg" 2>/dev/null; then
+            echo -e "      ${RED}eslint ${rule}${NC}: off (기대: ${exp})"
+            diff_count=$((diff_count+1))
+          fi
+        done
+        # ignores
+        if ! grep -q "dist" "$eslint_cfg" 2>/dev/null; then
+          echo -e "      ${YELLOW}eslint ignores${NC}: dist/** 없음 (기대: 포함)"
+          diff_count=$((diff_count+1))
+        fi
+        # globals (browser/node 환경)
+        if ! grep -q "globals" "$eslint_cfg" 2>/dev/null; then
+          echo -e "      ${YELLOW}eslint globals${NC}: 없음 (기대: browser + node 환경 선언)"
+          diff_count=$((diff_count+1))
+        fi
+      fi
+
+      # Husky hooks
+      [ ! -f "$dir/.husky/pre-commit" ] && echo -e "      ${YELLOW}.husky/pre-commit${NC}: 없음 (기대: config guard + eslint + tsc)" && diff_count=$((diff_count+1))
+      [ ! -f "$dir/.husky/commit-msg" ] && echo -e "      ${YELLOW}.husky/commit-msg${NC}: 없음 (기대: commitlint)" && diff_count=$((diff_count+1))
+      [ ! -f "$dir/.husky/pre-push" ] && echo -e "      ${YELLOW}.husky/pre-push${NC}: 없음 (기대: main 차단)" && diff_count=$((diff_count+1))
+
+      if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
+      ;;
+
+    python)
+      local has_ruff=0
+      [ -f "$dir/ruff.toml" ] && has_ruff=1
+      [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.ruff\]" "$dir/pyproject.toml" 2>/dev/null && has_ruff=1
+      if [ "$has_ruff" -eq 1 ]; then
+        local ruff_ver
+        ruff_ver=$(ruff --version 2>/dev/null | awk '{print $2}')
+        [ -n "$ruff_ver" ] && echo -e "    Ruff:        ${GREEN}${ruff_ver}${NC}" || echo -e "    Ruff:        ${GREEN}설정됨${NC}"
+      else
+        echo -e "    Ruff:        ${YELLOW}없음${NC}"
+      fi
+
+      local has_mypy=0
+      { [ -f "$dir/mypy.ini" ] || [ -f "$dir/.mypy.ini" ]; } && has_mypy=1
+      [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.mypy\]" "$dir/pyproject.toml" 2>/dev/null && has_mypy=1
+      if [ "$has_mypy" -eq 1 ]; then
+        local mypy_ver
+        mypy_ver=$(mypy --version 2>/dev/null | awk '{print $2}')
+        [ -n "$mypy_ver" ] && echo -e "    mypy:        ${GREEN}${mypy_ver}${NC}" || echo -e "    mypy:        ${GREEN}설정됨${NC}"
+      else
+        echo -e "    mypy:        ${YELLOW}없음${NC}"
+      fi
+
+      if [ -f "$dir/.pre-commit-config.yaml" ]; then
+        local pc_revs
+        pc_revs=$(grep "rev:" "$dir/.pre-commit-config.yaml" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
+        echo -e "    pre-commit:  ${GREEN}설정됨${NC} (${pc_revs})"
+      else
+        echo -e "    pre-commit:  ${YELLOW}없음${NC}"
+      fi
+
+      # 기대 설정 비교
+      local diff_count=0
+      echo -e "    ${BOLD}── 설정 비교 ──${NC}"
+
+      # ruff 설정
+      local ruff_cfg=""
+      [ -f "$dir/ruff.toml" ] && ruff_cfg="$dir/ruff.toml"
+      [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.ruff" "$dir/pyproject.toml" 2>/dev/null && ruff_cfg="$dir/pyproject.toml"
+      if [ -n "$ruff_cfg" ]; then
+        # line-length
+        if ! grep -qE "line-length\s*=\s*120" "$ruff_cfg" 2>/dev/null; then
+          local cur_ll
+          cur_ll=$(grep -oP "line-length\s*=\s*\K[0-9]+" "$ruff_cfg" 2>/dev/null | head -1 || true)
+          echo -e "      ${YELLOW}ruff line-length${NC}: ${cur_ll:-없음} (기대: 120)"
+          diff_count=$((diff_count+1))
+        fi
+        # select 규칙
+        for code in E F W I N UP B A C4 SIM; do
+          if ! grep -qE "select\s*=.*\"${code}\"" "$ruff_cfg" 2>/dev/null; then
+            echo -e "      ${YELLOW}ruff select ${code}${NC}: 없음 (기대: 포함)"
+            diff_count=$((diff_count+1))
+          fi
+        done
+        # ignore에 select 규칙 포함
+        for code in E F W I N UP B A C4 SIM; do
+          if grep -qE "ignore\s*=.*\"${code}" "$ruff_cfg" 2>/dev/null; then
+            echo -e "      ${RED}ruff ignore ${code}${NC}: 포함됨 (기대: 미포함 — select와 충돌)"
+            diff_count=$((diff_count+1))
+          fi
+        done
+      fi
+
+      # mypy 설정
+      local mypy_cfg=""
+      [ -f "$dir/pyproject.toml" ] && grep -q "\[tool\.mypy\]" "$dir/pyproject.toml" 2>/dev/null && mypy_cfg="$dir/pyproject.toml"
+      [ -f "$dir/mypy.ini" ] && mypy_cfg="$dir/mypy.ini"
+      [ -f "$dir/.mypy.ini" ] && mypy_cfg="$dir/.mypy.ini"
+      if [ -n "$mypy_cfg" ]; then
+        local -A mypy_expect=(
+          ["strict"]="true"
+          ["warn_return_any"]="true"
+          ["warn_unused_configs"]="true"
+          ["ignore_missing_imports"]="true"
+        )
+        for opt in "${!mypy_expect[@]}"; do
+          local exp="${mypy_expect[$opt]}"
+          if ! grep -qiE "${opt}\s*=\s*${exp}" "$mypy_cfg" 2>/dev/null; then
+            local cur_val
+            cur_val=$(grep -oiP "${opt}\s*=\s*\K\S+" "$mypy_cfg" 2>/dev/null | head -1 || true)
+            echo -e "      ${RED}mypy ${opt}${NC}: ${cur_val:-없음} (기대: ${exp})"
+            diff_count=$((diff_count+1))
+          fi
+        done
+        # strict 하위 옵션이 명시적 false
+        for opt in disallow_untyped_defs disallow_untyped_calls disallow_incomplete_defs; do
+          if grep -qiE "${opt}\s*=\s*(false|False)" "$mypy_cfg" 2>/dev/null; then
+            echo -e "      ${RED}mypy ${opt}${NC}: false (기대: strict에 의해 true)"
+            diff_count=$((diff_count+1))
+          fi
+        done
+      fi
+
+      # pre-commit config
+      [ ! -f "$dir/.pre-commit-config.yaml" ] && echo -e "      ${YELLOW}.pre-commit-config.yaml${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
+      [ ! -f "$dir/commitlint.config.mjs" ] && ! ls "$dir"/commitlint.config.* "$dir"/.commitlintrc* >/dev/null 2>&1 && echo -e "      ${YELLOW}commitlint 설정${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
+
+      if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
+      ;;
+
+    java-maven|java-gradle)
+      local has_cs=0
+      { [ -f "$dir/checkstyle.xml" ] || [ -f "$dir/config/checkstyle/checkstyle.xml" ]; } && has_cs=1
+      [ "$has_cs" -eq 1 ] && echo -e "    Checkstyle:  ${GREEN}설정됨${NC}" || echo -e "    Checkstyle:  ${YELLOW}없음${NC}"
+
+      # 빌드 플러그인 (checkstyle/spotless) + 버전 표시
+      local build_file=""
+      [ -f "$dir/pom.xml" ] && build_file="$dir/pom.xml"
+      [ -f "$dir/build.gradle" ] && build_file="$dir/build.gradle"
+      [ -f "$dir/build.gradle.kts" ] && build_file="$dir/build.gradle.kts"
+      if [ -n "$build_file" ] && grep -q "checkstyle\|spotless" "$build_file" 2>/dev/null; then
+        local spotless_cur gjf_cur
+        spotless_cur=$(grep -oP "spotless.*?version\s*['\"]?\K[0-9][0-9.]*" "$build_file" 2>/dev/null | head -1 || true)
+        gjf_cur=$(grep -oP "googleJavaFormat\(['\"]?\K[0-9][0-9.]*" "$build_file" 2>/dev/null | head -1 || true)
+        local detail=""
+        [ -n "$spotless_cur" ] && detail="spotless ${spotless_cur}"
+        [ -n "$gjf_cur" ] && detail="${detail:+$detail, }gjf ${gjf_cur}"
+        [ -n "$detail" ] && echo -e "    빌드 플러그인: ${GREEN}설정됨${NC} (${detail})" || echo -e "    빌드 플러그인: ${GREEN}설정됨${NC}"
+      else
+        echo -e "    빌드 플러그인: ${YELLOW}없음${NC}"
+      fi
+
+      [ -d "$dir/.githooks" ] && echo -e "    Git hooks:   ${GREEN}설정됨${NC}" || echo -e "    Git hooks:   ${YELLOW}없음${NC}"
+
+      # 기대 설정 비교
+      local diff_count=0
+      echo -e "    ${BOLD}── 설정 비교 ──${NC}"
+
+      # checkstyle 모듈
+      if [ "$has_cs" -eq 1 ]; then
+        local cs_file=""
+        [ -f "$dir/config/checkstyle/checkstyle.xml" ] && cs_file="$dir/config/checkstyle/checkstyle.xml"
+        [ -f "$dir/checkstyle.xml" ] && cs_file="$dir/checkstyle.xml"
+        if [ -n "$cs_file" ]; then
+          for mod in ConstantName LocalVariableName MemberName MethodName PackageName ParameterName TypeName AvoidStarImport UnusedImports NeedBraces LeftCurly RightCurly WhitespaceAround EmptyBlock MissingSwitchDefault FallThrough UpperEll NewlineAtEndOfFile; do
+            if ! grep -q "$mod" "$cs_file" 2>/dev/null; then
+              echo -e "      ${RED}checkstyle ${mod}${NC}: 없음 (기대: 있음)"
+              diff_count=$((diff_count+1))
+            fi
+          done
+          # FileLength max 값 비교
+          if grep -q "FileLength" "$cs_file" 2>/dev/null; then
+            local cur_fl
+            cur_fl=$(grep -A2 "FileLength" "$cs_file" 2>/dev/null | grep -oP 'value\s*=\s*"\K[0-9]+' || true)
+            if [ -n "$cur_fl" ] && [ "$cur_fl" != "700" ]; then
+              echo -e "      ${YELLOW}checkstyle FileLength max${NC}: ${cur_fl} (기대: 700)"
+              diff_count=$((diff_count+1))
+            fi
+          else
+            echo -e "      ${RED}checkstyle FileLength${NC}: 없음 (기대: max=700)"
+            diff_count=$((diff_count+1))
+          fi
+          # WhitespaceAround allowEmpty 옵션
+          if grep -q "WhitespaceAround" "$cs_file" 2>/dev/null; then
+            for prop in allowEmptyTypes allowEmptyConstructors allowEmptyMethods allowEmptyLambdas; do
+              if ! grep -q "$prop" "$cs_file" 2>/dev/null; then
+                echo -e "      ${YELLOW}checkstyle WhitespaceAround ${prop}${NC}: 없음 (기대: true)"
+                diff_count=$((diff_count+1))
+              fi
+            done
+          fi
+        fi
+      else
+        echo -e "      ${RED}checkstyle.xml${NC}: 없음 (기대: 있음)"
+        diff_count=$((diff_count+1))
+      fi
+
+      # 빌드 설정 — ignoreFailures / enforceCheck 감지
+      if [ -n "$build_file" ]; then
+        if grep -qiE "ignoreFailures\s*=\s*true" "$build_file" 2>/dev/null; then
+          echo -e "      ${RED}checkstyle ignoreFailures${NC}: true (기대: 제거 — 위반 시 빌드 실패)"
+          diff_count=$((diff_count+1))
+        fi
+        if grep -qiE "enforceCheck\s*=\s*false" "$build_file" 2>/dev/null; then
+          echo -e "      ${RED}spotless enforceCheck${NC}: false (기대: 제거 — 빌드 시 포맷 검사)"
+          diff_count=$((diff_count+1))
+        fi
+        if grep -qiE "failOnViolation.*false" "$build_file" 2>/dev/null; then
+          echo -e "      ${RED}checkstyle failOnViolation${NC}: false (기대: 제거 — 위반 시 빌드 실패)"
+          diff_count=$((diff_count+1))
+        fi
+      fi
+
+      # Git hooks
+      [ ! -d "$dir/.githooks" ] && echo -e "      ${RED}.githooks/${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
+      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/pre-commit" ] && echo -e "      ${YELLOW}.githooks/pre-commit${NC}: 없음 (기대: config guard + checkstyle + spotless)" && diff_count=$((diff_count+1))
+      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/commit-msg" ] && echo -e "      ${YELLOW}.githooks/commit-msg${NC}: 없음 (기대: conventional commits)" && diff_count=$((diff_count+1))
+      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/pre-push" ] && echo -e "      ${YELLOW}.githooks/pre-push${NC}: 없음 (기대: main 차단)" && diff_count=$((diff_count+1))
+
+      if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
+      ;;
+  esac
+}
+
+# ── Toolchain 상태 표시 (하위 모듈 재귀 탐색) ──
+show_toolchain_status() {
+  local dir="$1"
+  local label="${2:-}"
+  local stack
+  stack=$(detect_stack "$dir")
+
+  # 하위 모듈 탐색
+  local -a modules=()
+  while IFS= read -r mod; do
+    [ -n "$mod" ] && modules+=("$mod")
+  done < <(find_modules "$dir")
+
+  if [ ${#modules[@]} -gt 0 ]; then
+    for mod in "${modules[@]}"; do
+      local rel="${mod#$dir/}"
+      _show_module_status "$mod" "$rel"
+    done
+  elif [ "$stack" != "unknown" ]; then
+    local lbl="${label:-$(basename "$dir")}"
+    _show_module_status "$dir" "$lbl"
+  else
+    if [ -n "$label" ]; then
+      info "  ${label}: 지원 스택 없음"
+    else
+      info "  지원 스택 없음 (node/python/java)"
+    fi
+  fi
+  return 0
 }
 
 # ─────────────────────────────────────────────
@@ -469,16 +1170,16 @@ cmd_init() {
   done
   ok "  → .claude/teamace/knowledge/ 생성 완료 (에이전트 5개)"
 
-  # 4. Toolchain 검사 (P0: TypeScript strict, ESLint, Husky+commitlint)
-  info "코드 품질 도구 검사 중..."
+  # 4. Toolchain 로컬 설치 (스택별 lint, hooks, commit 규칙)
+  info "코드 품질 도구 설치 중..."
   echo ""
 
   if [ "$project_type" = "multi" ]; then
     for repo in "${sub_repos[@]}"; do
-      run_toolchain_check "$project_dir/$repo" "$repo"
+      setup_toolchain "$project_dir/$repo" "$repo"
     done
   else
-    run_toolchain_check "$project_dir"
+    setup_toolchain "$project_dir"
   fi
 
   # 5. Create project-level CLAUDE.md if not exists
@@ -505,6 +1206,14 @@ cmd_init() {
 
       echo ""
       echo "## 프로젝트별 규칙"
+      echo ""
+      echo "### 린트·정적분석 설정 변경 금지"
+      echo ""
+      echo "ESLint, tsconfig, Checkstyle, Ruff, mypy 등의 규칙·옵션을 에이전트가 임의로 추가·제거·완화하지 않는다."
+      echo ""
+      echo "- 린트 에러 발생 시 **코드를 규칙에 맞게 수정**한다 (규칙을 끄지 않는다)"
+      echo "- 규칙 자체의 조정이 필요하다고 판단되면 사용자에게 보고하고 승인을 받은 후에만 변경한다"
+      echo '- `// eslint-disable`, `# type: ignore`, `@SuppressWarnings` 등 인라인 억제도 동일 — 사유를 명시하고 사용자 승인 필수'
       echo ""
     } > "$project_claude"
 
@@ -631,26 +1340,25 @@ cmd_status() {
 
   # Toolchain 상태
   echo ""
-  echo -e "${BOLD}코드 품질 도구 (P0)${NC}"
+  echo -e "${BOLD}코드 품질 도구${NC}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   local current_dir
   current_dir="$(pwd)"
 
   if [ -d ".git" ]; then
-    # 단일 레포
-    run_toolchain_check "$current_dir"
+    show_toolchain_status "$current_dir"
   else
     local -a tc_repos=()
     for d in ./*/; do
-      [ -f "${d}package.json" ] && tc_repos+=("$(basename "$d")")
+      [ -d "$d" ] && [ "$(detect_stack "$(cd "$d" && pwd)")" != "unknown" ] && tc_repos+=("$(basename "$d")")
     done
     if [ ${#tc_repos[@]} -gt 0 ]; then
       for repo in "${tc_repos[@]}"; do
-        run_toolchain_check "$current_dir/$repo" "$repo"
+        show_toolchain_status "$current_dir/$repo" "$repo"
       done
     else
-      info "  Node 프로젝트를 찾을 수 없습니다."
+      info "  지원 스택 없음 (node/python/java)"
     fi
   fi
   echo ""
