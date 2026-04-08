@@ -55,7 +55,7 @@ if [ -d "$HOME/.claude/commands/frontend-design" ]; then
   rm -rf "$HOME/.claude/commands/frontend-design"
   IMPECCABLE_REMOVED=1
 fi
-for f in "$HOME"/.claude/commands/*impeccable* 2>/dev/null; do
+for f in "$HOME"/.claude/commands/*impeccable*; do
   [ -e "$f" ] && rm -rf "$f" && IMPECCABLE_REMOVED=1
 done
 if [ "$IMPECCABLE_REMOVED" -eq 1 ]; then

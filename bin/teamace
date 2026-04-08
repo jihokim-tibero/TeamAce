@@ -466,7 +466,7 @@ cmd_uninstall() {
   local impeccable_removed=0
   [ -d "$HOME/.agents/skills/frontend-design" ] && rm -rf "$HOME/.agents/skills/frontend-design" && impeccable_removed=1
   [ -d "$HOME/.claude/commands/frontend-design" ] && rm -rf "$HOME/.claude/commands/frontend-design" && impeccable_removed=1
-  for f in "$HOME"/.claude/commands/*impeccable* 2>/dev/null; do
+  for f in "$HOME"/.claude/commands/*impeccable*; do
     [ -e "$f" ] && rm -rf "$f" && impeccable_removed=1
   done
   if [ "$impeccable_removed" -eq 1 ]; then
