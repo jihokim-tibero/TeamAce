@@ -55,7 +55,7 @@ detect_platform() {
     # http(s) 프로토콜 감지
     local scheme="https"
     echo "$origin_url" | grep -q "^http://" && scheme="http"
-    if curl -sf --max-time 3 "${scheme}://${host}/api/v4/version" &>/dev/null; then
+    if curl -s --max-time 3 -o /dev/null -w "%{http_code}" "${scheme}://${host}/api/v4/version" 2>/dev/null | grep -qE "^(200|401|403)$"; then
       echo "gitlab"; return
     fi
   fi
