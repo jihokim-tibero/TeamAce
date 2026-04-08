@@ -92,6 +92,290 @@ check_impeccable() {
 }
 
 # ─────────────────────────────────────────────
+# Toolchain 검사 — P0 도구 (TypeScript, ESLint, Husky+commitlint)
+# ─────────────────────────────────────────────
+
+# tsconfig.json 에서 strict: true 여부 확인
+# $1 = 프로젝트 디렉터리
+check_typescript_strict() {
+  local dir="$1"
+  local tsconfig="$dir/tsconfig.json"
+  [ -f "$tsconfig" ] || return 2  # tsconfig 자체가 없음
+  node -e "
+    const ts = JSON.parse(require('fs').readFileSync('$tsconfig','utf8'));
+    process.exit(ts.compilerOptions && ts.compilerOptions.strict === true ? 0 : 1);
+  " 2>/dev/null && return 0
+  return 1  # strict 가 false 이거나 없음
+}
+
+# ESLint 설정 파일 존재 + 핵심 규칙 확인
+# 반환: 0=설정+핵심규칙 OK, 1=설정 파일 없음, 2=설정 있으나 핵심 규칙 부족
+# $1 = 프로젝트 디렉터리
+check_eslint_setup() {
+  local dir="$1"
+  local config_file=""
+
+  # flat config or legacy config 찾기
+  for f in "$dir"/eslint.config.{js,mjs,cjs,ts} "$dir"/.eslintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && config_file="$f" && break
+  done
+
+  # package.json 내 eslintConfig 필드
+  if [ -z "$config_file" ] && [ -f "$dir/package.json" ]; then
+    node -e "
+      const p = JSON.parse(require('fs').readFileSync('$dir/package.json','utf8'));
+      process.exit(p.eslintConfig ? 0 : 1);
+    " 2>/dev/null && config_file="$dir/package.json"
+  fi
+
+  [ -z "$config_file" ] && return 1  # 설정 파일 자체가 없음
+
+  # 핵심 규칙 존재 여부 확인: 설정 파일 + node_modules 에서 키워드 검색
+  # TeamAce P0 핵심 규칙: no-console, no-explicit-any
+  local missing_rules=()
+  if ! grep -rq "no-console" "$dir"/eslint.config.* "$dir"/.eslintrc* "$dir"/package.json 2>/dev/null; then
+    missing_rules+=("no-console")
+  fi
+  if ! grep -rq "no-explicit-any\|@typescript-eslint" "$dir"/eslint.config.* "$dir"/.eslintrc* "$dir"/package.json 2>/dev/null; then
+    missing_rules+=("@typescript-eslint/no-explicit-any")
+  fi
+
+  if [ ${#missing_rules[@]} -gt 0 ]; then
+    # 글로벌 변수로 누락 규칙 전달
+    ESLINT_MISSING_RULES="${missing_rules[*]}"
+    return 2  # 설정 있으나 핵심 규칙 부족
+  fi
+
+  ESLINT_MISSING_RULES=""
+  return 0
+}
+
+# Husky 설정 확인 — .husky/ 존재 + 훅 파일 내용 검사
+# 반환: 0=훅 정상, 1=디렉터리 없음, 2=디렉터리 있으나 훅 부족
+# $1 = 프로젝트 디렉터리
+check_husky_setup() {
+  local dir="$1"
+  [ -d "$dir/.husky" ] || return 1
+
+  local missing_hooks=()
+
+  # commit-msg 훅 존재 + commitlint 연동 확인
+  if [ -f "$dir/.husky/commit-msg" ]; then
+    grep -q "commitlint" "$dir/.husky/commit-msg" 2>/dev/null || missing_hooks+=("commit-msg→commitlint")
+  else
+    missing_hooks+=("commit-msg")
+  fi
+
+  # pre-push 훅 존재 + main 브랜치 차단 확인
+  if [ -f "$dir/.husky/pre-push" ]; then
+    grep -q "main" "$dir/.husky/pre-push" 2>/dev/null || missing_hooks+=("pre-push→main차단")
+  else
+    missing_hooks+=("pre-push")
+  fi
+
+  if [ ${#missing_hooks[@]} -gt 0 ]; then
+    HUSKY_MISSING_HOOKS="${missing_hooks[*]}"
+    return 2
+  fi
+
+  HUSKY_MISSING_HOOKS=""
+  return 0
+}
+
+# commitlint 설정 확인 — 설정 파일 존재 + extends 설정 여부
+# 반환: 0=정상, 1=설정 없음, 2=설정 있으나 extends 미설정
+# $1 = 프로젝트 디렉터리
+check_commitlint_setup() {
+  local dir="$1"
+  local config_file=""
+
+  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && config_file="$f" && break
+  done
+
+  # package.json 내 commitlint 필드
+  if [ -z "$config_file" ] && [ -f "$dir/package.json" ]; then
+    node -e "
+      const p = JSON.parse(require('fs').readFileSync('$dir/package.json','utf8'));
+      process.exit(p.commitlint ? 0 : 1);
+    " 2>/dev/null && config_file="$dir/package.json"
+  fi
+
+  [ -z "$config_file" ] && return 1  # 설정 파일 자체가 없음
+
+  # extends 설정 확인 (config-conventional 등)
+  if ! grep -rq "extends\|config-conventional" "$config_file" 2>/dev/null; then
+    return 2  # 설정 있으나 extends 미설정
+  fi
+
+  return 0
+}
+
+# 단일 디렉터리에 대한 Toolchain 검사 실행 + 안내 출력
+# $1 = 프로젝트(또는 서브레포) 디렉터리, $2 = 라벨 (옵션)
+run_toolchain_check() {
+  local dir="$1"
+  local label="${2:-}"
+  local has_package_json=0
+  [ -f "$dir/package.json" ] && has_package_json=1
+
+  if [ "$has_package_json" -eq 0 ]; then
+    return  # Node 프로젝트가 아니면 검사 스킵
+  fi
+
+  [ -n "$label" ] && info "─── ${label} 도구 검사 ───"
+
+  local missing_items=()
+
+  # 1) TypeScript strict
+  local ts_result
+  check_typescript_strict "$dir" && ts_result="ok" || ts_result=$?
+  if [ "$ts_result" = "ok" ]; then
+    ok "  → TypeScript strict: 활성화됨"
+  elif [ "$ts_result" = "2" ]; then
+    warn "  → TypeScript strict: tsconfig.json 없음"
+    missing_items+=("typescript")
+  else
+    warn "  → TypeScript strict: 비활성 상태"
+    missing_items+=("typescript-strict")
+  fi
+
+  # 2) ESLint
+  local eslint_result
+  ESLINT_MISSING_RULES=""
+  check_eslint_setup "$dir" && eslint_result="ok" || eslint_result=$?
+  if [ "$eslint_result" = "ok" ]; then
+    ok "  → ESLint: 핵심 규칙 적용됨"
+  elif [ "$eslint_result" = "2" ]; then
+    warn "  → ESLint: 설정은 있으나 누락 규칙 — ${ESLINT_MISSING_RULES}"
+    missing_items+=("eslint-rules")
+  else
+    warn "  → ESLint: 설정 파일 없음"
+    missing_items+=("eslint")
+  fi
+
+  # 3) Husky
+  local husky_result
+  HUSKY_MISSING_HOOKS=""
+  check_husky_setup "$dir" && husky_result="ok" || husky_result=$?
+  if [ "$husky_result" = "ok" ]; then
+    ok "  → Husky: 훅 정상 (commit-msg, pre-push)"
+  elif [ "$husky_result" = "2" ]; then
+    warn "  → Husky: 디렉터리 있으나 훅 부족 — ${HUSKY_MISSING_HOOKS}"
+    missing_items+=("husky-hooks")
+  else
+    warn "  → Husky: 미설치"
+    missing_items+=("husky")
+  fi
+
+  # 4) commitlint
+  local commitlint_result
+  check_commitlint_setup "$dir" && commitlint_result="ok" || commitlint_result=$?
+  if [ "$commitlint_result" = "ok" ]; then
+    ok "  → commitlint: 설정 정상"
+  elif [ "$commitlint_result" = "2" ]; then
+    warn "  → commitlint: 설정 파일은 있으나 extends 미설정"
+    missing_items+=("commitlint-extends")
+  else
+    warn "  → commitlint: 설정 파일 없음"
+    missing_items+=("commitlint")
+  fi
+
+  # 누락 항목이 있으면 설정 가이드 출력
+  if [ ${#missing_items[@]} -gt 0 ]; then
+    echo ""
+    echo -e "  ${YELLOW}📋 설정 가이드${NC} (${dir##*/})"
+    echo ""
+
+    for item in "${missing_items[@]}"; do
+      case "$item" in
+        typescript)
+          echo -e "  ${BOLD}[TypeScript]${NC} 설치 및 strict 모드 활성화:"
+          echo "    npm install -D typescript"
+          echo "    npx tsc --init  # 생성 후 strict: true 확인"
+          echo ""
+          ;;
+        typescript-strict)
+          echo -e "  ${BOLD}[TypeScript strict]${NC} tsconfig.json 수정:"
+          echo "    compilerOptions.strict = true"
+          echo "    compilerOptions.noImplicitAny = true"
+          echo ""
+          ;;
+        eslint)
+          echo -e "  ${BOLD}[ESLint]${NC} 설치 및 설정:"
+          echo "    npm install -D eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser"
+          echo "    # eslint.config.mjs 를 생성하고 아래 규칙 추가:"
+          echo "    #   no-console: error"
+          echo "    #   max-lines: [warn, 300]"
+          echo "    #   max-lines-per-function: [warn, { max: 50 }]"
+          echo "    #   @typescript-eslint/no-explicit-any: error"
+          echo "    #   camelcase: [error, { properties: always }]"
+          echo "    #   no-magic-numbers: [warn, { ignore: [0, 1, -1] }]"
+          echo ""
+          ;;
+        eslint-rules)
+          echo -e "  ${BOLD}[ESLint 규칙 보완]${NC} 다음 규칙을 ESLint 설정에 추가하세요:"
+          for rule in $ESLINT_MISSING_RULES; do
+            echo "    - $rule"
+          done
+          echo "    # 권장 전체 규칙:"
+          echo "    #   no-console: error"
+          echo "    #   max-lines: [warn, 300]"
+          echo "    #   max-lines-per-function: [warn, { max: 50 }]"
+          echo "    #   @typescript-eslint/no-explicit-any: error"
+          echo "    #   camelcase: [error, { properties: always }]"
+          echo "    #   no-magic-numbers: [warn, { ignore: [0, 1, -1] }]"
+          echo ""
+          ;;
+        husky)
+          echo -e "  ${BOLD}[Husky]${NC} 설치:"
+          echo "    npm install -D husky"
+          echo "    npx husky init"
+          echo "    # .husky/commit-msg 훅 생성 (commitlint 연동):"
+          echo '    echo "npx --no -- commitlint --edit \$1" > .husky/commit-msg'
+          echo "    # .husky/pre-push 훅 생성 (main 브랜치 푸시 차단):"
+          echo '    cat > .husky/pre-push << '\''HOOK'\'''
+          echo '    branch=$(git rev-parse --abbrev-ref HEAD)'
+          echo '    if [ "$branch" = "main" ]; then echo "main 직접 push 금지"; exit 1; fi'
+          echo '    HOOK'
+          echo ""
+          ;;
+        husky-hooks)
+          echo -e "  ${BOLD}[Husky 훅 보완]${NC} 누락된 훅을 추가하세요:"
+          for hook in $HUSKY_MISSING_HOOKS; do
+            case "$hook" in
+              commit-msg*)
+                echo "    # .husky/commit-msg 훅 생성:"
+                echo '    echo "npx --no -- commitlint --edit \$1" > .husky/commit-msg'
+                ;;
+              pre-push*)
+                echo "    # .husky/pre-push 훅 생성 (main 브랜치 푸시 차단):"
+                echo '    cat > .husky/pre-push << '\''HOOK'\'''
+                echo '    branch=$(git rev-parse --abbrev-ref HEAD)'
+                echo '    if [ "$branch" = "main" ]; then echo "main 직접 push 금지"; exit 1; fi'
+                echo '    HOOK'
+                ;;
+            esac
+          done
+          echo ""
+          ;;
+        commitlint)
+          echo -e "  ${BOLD}[commitlint]${NC} 설치 및 설정:"
+          echo "    npm install -D @commitlint/cli @commitlint/config-conventional"
+          echo "    echo \"export default { extends: ['@commitlint/config-conventional'] };\" > commitlint.config.mjs"
+          echo ""
+          ;;
+        commitlint-extends)
+          echo -e "  ${BOLD}[commitlint extends]${NC} 설정 파일에 extends를 추가하세요:"
+          echo "    export default { extends: ['@commitlint/config-conventional'] };"
+          echo ""
+          ;;
+      esac
+    done
+  fi
+}
+
+# ─────────────────────────────────────────────
 # teamace init — 현재 프로젝트 초기화
 # ─────────────────────────────────────────────
 
@@ -185,7 +469,19 @@ cmd_init() {
   done
   ok "  → .claude/teamace/knowledge/ 생성 완료 (에이전트 5개)"
 
-  # 4. Create project-level CLAUDE.md if not exists
+  # 4. Toolchain 검사 (P0: TypeScript strict, ESLint, Husky+commitlint)
+  info "코드 품질 도구 검사 중..."
+  echo ""
+
+  if [ "$project_type" = "multi" ]; then
+    for repo in "${sub_repos[@]}"; do
+      run_toolchain_check "$project_dir/$repo" "$repo"
+    done
+  else
+    run_toolchain_check "$project_dir"
+  fi
+
+  # 5. Create project-level CLAUDE.md if not exists
   local project_claude="$project_dir/CLAUDE.md"
   if [ ! -f "$project_claude" ]; then
     info "프로젝트 CLAUDE.md 생성 중..."
@@ -217,7 +513,7 @@ cmd_init() {
     ok "  → CLAUDE.md 이미 존재 (건너뜀)"
   fi
 
-  # 4. Summary
+  # 6. Summary
   echo ""
   echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo -e "${GREEN} 프로젝트 초기화 완료!${NC}"
@@ -330,6 +626,31 @@ cmd_status() {
       done
     else
       echo -e "  프로젝트 구조: ${YELLOW}Git 저장소 없음${NC}"
+    fi
+  fi
+
+  # Toolchain 상태
+  echo ""
+  echo -e "${BOLD}코드 품질 도구 (P0)${NC}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  local current_dir
+  current_dir="$(pwd)"
+
+  if [ -d ".git" ]; then
+    # 단일 레포
+    run_toolchain_check "$current_dir"
+  else
+    local -a tc_repos=()
+    for d in ./*/; do
+      [ -f "${d}package.json" ] && tc_repos+=("$(basename "$d")")
+    done
+    if [ ${#tc_repos[@]} -gt 0 ]; then
+      for repo in "${tc_repos[@]}"; do
+        run_toolchain_check "$current_dir/$repo" "$repo"
+      done
+    else
+      info "  Node 프로젝트를 찾을 수 없습니다."
     fi
   fi
   echo ""
