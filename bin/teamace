@@ -31,28 +31,36 @@ check_installed() {
 # Git 플랫폼 감지
 detect_platform() {
   local dir="$1"
-  local remote_url
-  remote_url=$(git -C "$dir" remote -v 2>/dev/null | head -1)
-  if echo "$remote_url" | grep -q "github.com"; then
-    echo "github"
-  elif echo "$remote_url" | grep -qi "gitlab"; then
-    echo "gitlab"
-  elif echo "$remote_url" | grep -q "bitbucket"; then
-    echo "bitbucket"
-  else
-    # 자체 호스팅 GitLab 감지: glab로 API 확인
-    if command -v glab &>/dev/null && glab api version -R "$dir" &>/dev/null 2>&1; then
-      echo "gitlab"
-    # git remote URL에서 glab 설정 확인
-    elif git -C "$dir" config --get remote.origin.url 2>/dev/null | grep -qi "gitlab"; then
-      echo "gitlab"
-    # .gitlab-ci.yml 존재 여부로 판별
-    elif [ -f "$dir/.gitlab-ci.yml" ]; then
-      echo "gitlab"
-    else
-      echo "unknown"
+  local origin_url
+  origin_url=$(git -C "$dir" config --get remote.origin.url 2>/dev/null)
+
+  # 1. URL 문자열로 판별
+  if echo "$origin_url" | grep -q "github.com"; then
+    echo "github"; return
+  elif echo "$origin_url" | grep -qi "gitlab"; then
+    echo "gitlab"; return
+  elif echo "$origin_url" | grep -q "bitbucket"; then
+    echo "bitbucket"; return
+  fi
+
+  # 2. .gitlab-ci.yml 존재
+  if [ -f "$dir/.gitlab-ci.yml" ]; then
+    echo "gitlab"; return
+  fi
+
+  # 3. remote 호스트의 GitLab API 확인 (자체 호스팅 대응)
+  local host
+  host=$(echo "$origin_url" | sed -E 's#^(https?://|git@)([^/:]+).*#\2#')
+  if [ -n "$host" ]; then
+    # http(s) 프로토콜 감지
+    local scheme="https"
+    echo "$origin_url" | grep -q "^http://" && scheme="http"
+    if curl -sf --max-time 3 "${scheme}://${host}/api/v4/version" &>/dev/null; then
+      echo "gitlab"; return
     fi
   fi
+
+  echo "unknown"
 }
 
 # Agent Team 실험 기능 활성화 여부 확인
