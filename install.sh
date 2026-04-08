@@ -55,7 +55,7 @@ info "디렉터리 구조 생성 중..."
 
 mkdir -p "$CLAUDE_DIR"
 mkdir -p "$AGENTS_DIR"
-mkdir -p "$TEAMACE_DIR"/{skills/{pm,pub,fe,be,qa},knowledge,contracts,harness,core-principles,config}
+mkdir -p "$TEAMACE_DIR"/{skills/{pm,pub,fe,be,qa},contracts,harness,core-principles,config}
 mkdir -p "$BIN_DIR"
 
 # ─────────────────────────────────────────────
@@ -83,10 +83,6 @@ for agent in pm pub fe be qa; do
 done
 ok "  → skills 설치 완료"
 
-# Knowledge
-cp "$SCRIPT_DIR"/src/knowledge/*.md "$TEAMACE_DIR/knowledge/" 2>/dev/null || true
-ok "  → knowledge 설치 완료"
-
 # Contracts
 cp "$SCRIPT_DIR"/src/contracts/*.md "$TEAMACE_DIR/contracts/"
 ok "  → contracts 설치 완료"
@@ -101,6 +97,28 @@ ok "  → core-principles 설치 완료"
 
 # Version marker
 echo "$VERSION" > "$TEAMACE_DIR/version"
+
+# ─────────────────────────────────────────────
+# 3-1. Install Impeccable design skill (global)
+# ─────────────────────────────────────────────
+
+info "Impeccable 디자인 스킬 글로벌 설치 중..."
+
+IMPECCABLE_INSTALLED=0
+[ -d "$HOME/.agents/skills/frontend-design" ] && IMPECCABLE_INSTALLED=1
+[ -d "$HOME/.claude/commands/frontend-design" ] && IMPECCABLE_INSTALLED=1
+ls "$HOME"/.claude/commands/*impeccable* &>/dev/null 2>&1 && IMPECCABLE_INSTALLED=1
+
+if [ "$IMPECCABLE_INSTALLED" -eq 1 ]; then
+  ok "  → Impeccable 이미 설치됨 (건너뜀)"
+else
+  if npx -y skills add pbakaus/impeccable --agent claude-code --global --yes 2>/dev/null; then
+    ok "  → Impeccable 글로벌 설치 완료"
+  else
+    warn "  → Impeccable 자동 설치 실패. 수동으로 설치하세요:"
+    warn "    npx skills add pbakaus/impeccable --agent claude-code --global --yes"
+  fi
+fi
 
 # ─────────────────────────────────────────────
 # 4. Update ~/.claude/CLAUDE.md
@@ -215,7 +233,9 @@ echo "  설치 위치:"
 echo "    에이전트 정의  → ~/.claude/agents/"
 echo "    핵심 원칙      → ~/.claude/teamace/core-principles/"
 echo "    지원 파일      → ~/.claude/teamace/"
+echo "    Impeccable     → ~/.agents/skills/ 또는 ~/.claude/commands/"
 echo "    글로벌 지침    → ~/.claude/CLAUDE.md"
+echo "    MCP/환경 설정  → ~/.claude/settings.json"
 echo "    CLI           → ~/.local/bin/teamace"
 echo ""
 echo "  다음 단계:"

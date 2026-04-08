@@ -46,6 +46,25 @@ features/[domain]/
     └── use[Feature]Transform.test.ts
 ```
 
+## 비동기 패턴
+
+### 폴링 패턴 (Job 기반 비동기 처리)
+비동기 작업이 즉시 완료되지 않는 경우 Job 생성 → 주기적 폴링 → 최종 상태 전환 패턴을 적용한다.
+- createJob → poll (2초 간격 등) → 완료/실패 상태 전환
+- 최대 폴링 횟수 설정으로 무한 대기 방지
+- 폴링 중 사용자에게 진행 상태 피드백
+
+### SSE 스트림 소비 패턴
+Server-Sent Events를 소비할 때 이벤트 타입별 분기 처리를 적용한다.
+- `event:` 필드 기반으로 분기 (예: reasoning, result, error)
+- 각 이벤트 타입별 로컬 상태 업데이트
+- 연결 끊김 시 재연결 로직 + 사용자 알림
+
+### View 상태 머신
+느슨한 문자열 대신 유니온 타입으로 View 상태를 정의하고 모든 가능한 상태를 exhaustive하게 처리한다.
+- `type ViewState = IdleState | LoadingState | SuccessState | ErrorState | EmptyState`
+- switch/match에서 누락 상태가 컴파일 타임에 잡히도록 구성
+
 ## 품질 체크리스트
 - [ ] any 타입 0개
 - [ ] 모든 API 엔드포인트에 에러 핸들링

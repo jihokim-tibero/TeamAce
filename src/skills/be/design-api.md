@@ -25,6 +25,23 @@ FE와 QA가 신뢰할 수 있는 명확한 API 계약을 정의한다.
 ## 출력 형식
 `~/.claude/agents/be.md`의 API 명세 형식 참조
 
+## 구현 패턴
+
+### requestId 상관 추적
+- 요청 필터(OncePerRequestFilter 등)에서 고유 requestId 생성
+- 클라이언트가 `X-Request-Id` 헤더를 보내면 해당 값을 우선 사용
+- requestId를 스레드 컨텍스트에 주입하여 모든 로그에 자동 포함
+- 모든 에러 응답에 requestId 포함 (클라이언트 지원 티켓 연계)
+
+### 예외 핸들러 계층
+- 주요 예외 타입별 명시적 핸들러 (IllegalArgumentException → 400, NotFoundException → 404 등)
+- 예상하지 못한 예외를 위한 catch-all 핸들러 (Exception → 500 + requestId 로깅)
+- 핸들러 누락으로 인한 무응답 500 에러 방지
+
+### 스키마 초기화 안전 패턴
+- 마이그레이션 도구가 없는 경우 `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS` 패턴 사용
+- 단, 버전 추적 없는 스키마 관리의 한계를 인지하고 마이그레이션 도구 도입 계획 수립
+
 ## 품질 체크리스트
 - [ ] 기능 명세서 기능 대비 엔드포인트 매핑 100%
 - [ ] 모든 엔드포인트에 에러 코드 정의

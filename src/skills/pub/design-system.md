@@ -4,7 +4,7 @@
 프로젝트의 디자인 토큰과 공유 UI 컴포넌트를 코드로 구축한다. Impeccable 스킬의 디자인 원칙을 TeamAce의 코드 구조에 맞게 적용한다.
 
 ## 전제 조건
-- Impeccable 스킬이 프로젝트에 설치되어 있어야 함 (`.claude/skills/`)
+- Impeccable 스킬이 글로벌 설치되어 있어야 함 (`~/.agents/skills/frontend-design/` 또는 `~/.claude/commands/frontend-design/`)
 - Impeccable 레퍼런스 파일을 디자인 판단의 근거로 활용
 
 ## 트리거
@@ -20,7 +20,7 @@
 
 ### 1. Impeccable 레퍼런스 확인
 
-디자인 토큰 정의 전, 프로젝트의 `.claude/skills/` 내 Impeccable 레퍼런스를 읽고 원칙 파악:
+디자인 토큰 정의 전, Impeccable 글로벌 스킬의 레퍼런스를 읽고 원칙 파악:
 - `color-and-contrast.md` → OKLCH 팔레트 구성 원칙
 - `typography.md` → 서체 선택·스케일 기준
 - `spatial-design.md` → 간격·그리드 체계

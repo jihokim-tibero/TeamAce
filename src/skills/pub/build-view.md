@@ -4,7 +4,7 @@
 PM 기획서를 기반으로 Impeccable 디자인 원칙을 적용한 View 컴포넌트(React TSX + Tailwind CSS)를 구현한다. 코드가 곧 시안이다.
 
 ## 전제 조건
-- Impeccable 스킬이 프로젝트에 설치되어 있어야 함 (`.claude/skills/`)
+- Impeccable 스킬이 글로벌 설치되어 있어야 함 (`~/.agents/skills/frontend-design/` 또는 `~/.claude/commands/frontend-design/`)
 - `frontend-design` 스킬이 디자인 판단의 기초가 됨
 - 7개 레퍼런스 파일이 각 도메인의 세부 기준 제공
 

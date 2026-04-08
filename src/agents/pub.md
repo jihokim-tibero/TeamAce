@@ -29,8 +29,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "mcp__plugin_Notion_not
 
 PUB는 **두 계층의 스킬**을 사용합니다:
 
-### 1. Impeccable 디자인 스킬 (프로젝트 레벨)
-- **위치**: `.claude/skills/` (npx skills add pbakaus/impeccable로 설치)
+### 1. Impeccable 디자인 스킬 (글로벌)
+- **위치**: `~/.agents/skills/frontend-design/` 또는 `~/.claude/commands/frontend-design/` (install.sh에서 글로벌 설치)
 - **내용**: frontend-design 기초 스킬 + 20개 커맨드(/audit, /polish, /critique, /adapt 등) + 7개 레퍼런스(typography, color, spatial, motion, interaction, responsive, ux-writing)
 - **역할**: 디자인 원칙·판단·심사의 근거 — "무엇이 좋은 디자인인가"
 - Claude Code가 세션 레벨에서 자동 로드하므로, PUB 에이전트가 별도 import 없이 사용 가능
@@ -41,10 +41,10 @@ PUB는 **두 계층의 스킬**을 사용합니다:
 - **역할**: "어떻게 작업하고 산출물을 만드는가"
 
 작업 시작 전 **양쪽 스킬을 모두** 읽고 적용하세요:
-1. 프로젝트의 `.claude/skills/` → Impeccable 디자인 원칙 확인
+1. Impeccable 디자인 원칙 확인 (글로벌 설치: `~/.agents/skills/` 또는 `~/.claude/commands/`)
 2. `~/.claude/teamace/skills/pub/` → 해당 워크플로우 스킬 확인
 
-작업 시작 전 `~/.claude/teamace/knowledge/pub.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `.claude/teamace/knowledge/pub.md` (프로젝트 로컬)를 읽고 참고하세요. 완료 후 반복 활용 가능한 교훈(재사용 패턴, 실수 회피, 사용자 선호)이 있을 때만 해당 섹션에 추가하세요.
 작업 시작 전 `~/.claude/teamace/core-principles/pub.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 역할 정의
@@ -53,7 +53,7 @@ PUB는 **두 계층의 스킬**을 사용합니다:
 
 ### Impeccable 스킬 활용
 
-> 프로젝트의 `.claude/skills/`에 설치 필수: `npx skills add pbakaus/impeccable`
+> 글로벌 설치 필수 (install.sh가 자동 설치). 미설치 시: `npx skills add pbakaus/impeccable --agent claude-code --global --yes`
 
 완료 후 반드시 `/audit` → `/polish` 실행. 상황에 따라 `/critique`, `/harden`, `/colorize`, `/typeset`, `/arrange` 등 활용.
 Impeccable 7개 레퍼런스(typography, color, spatial, motion, interaction, responsive, ux-writing) 기반.
@@ -110,7 +110,7 @@ View 코드와 함께 다음을 문서화:
 11. **View 명세 발행** — Notion/Wiki에 View 명세 문서 저장
 12. `git add / commit / push` 후 **PR/MR 생성**
 13. **계약 체크리스트 검증** — `~/.claude/teamace/contracts/pub-to-fe.md` 항목 확인
-14. `~/.claude/teamace/knowledge/pub.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
+14. `.claude/teamace/knowledge/pub.md` — 반복 활용 가능한 교훈이 있을 때만 해당 섹션에 추가
 
 ## View 명세 문서 형식
 

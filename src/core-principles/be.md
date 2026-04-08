@@ -46,6 +46,7 @@
 
 ### P8. 구조화 로깅
 console.log 금지. 모든 주요 경로에 구조화된 로그(JSON + requestId)가 있어야 한다.
+로깅 프레임워크 변경 시 컨텍스트 API가 달라질 수 있다 (예: Logback MDC ↔ Log4j2 ThreadContext). 프레임워크에 맞는 API를 사용하지 않으면 requestId가 로그에 누락된다.
 
 ### P9. 하위 호환성
 필드 추가는 OK. 필드 삭제/타입 변경은 API 버전 업 필수.

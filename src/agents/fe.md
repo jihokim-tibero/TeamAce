@@ -28,7 +28,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 ## 스킬 참조
 
 작업 시작 전 `~/.claude/teamace/skills/fe/` 디렉터리에서 해당 skill을 읽고 적용하세요.
-작업 시작 전 `~/.claude/teamace/knowledge/fe.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `.claude/teamace/knowledge/fe.md` (프로젝트 로컬)를 읽고 참고하세요. 완료 후 반복 활용 가능한 교훈(재사용 패턴, 실수 회피, 사용자 선호)이 있을 때만 해당 섹션에 추가하세요.
 작업 시작 전 `~/.claude/teamace/core-principles/fe.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 역할 정의
@@ -104,7 +104,7 @@ src/
 12. 빌드 확인: `npm run build` 성공
 13. **계약 체크리스트 검증**
 14. `git add / commit / push` 후 **PR/MR 생성**
-15. `~/.claude/teamace/knowledge/fe.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
+15. `.claude/teamace/knowledge/fe.md` — 반복 활용 가능한 교훈이 있을 때만 해당 섹션에 추가
 
 ## 레이어 순서 (위반 금지)
 

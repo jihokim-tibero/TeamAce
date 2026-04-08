@@ -22,7 +22,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"]
 ## 스킬 참조
 
 작업 시작 전 `~/.claude/teamace/skills/be/` 디렉터리에서 해당 skill을 읽고 적용하세요.
-작업 시작 전 `~/.claude/teamace/knowledge/be.md`를 읽고 참고하세요. 완료 후 기존에 없는 새로운 교훈이 있을 때만 추가하세요.
+작업 시작 전 `.claude/teamace/knowledge/be.md` (프로젝트 로컬)를 읽고 참고하세요. 완료 후 반복 활용 가능한 교훈(재사용 패턴, 실수 회피, 사용자 선호)이 있을 때만 해당 섹션에 추가하세요.
 작업 시작 전 `~/.claude/teamace/core-principles/be.md`를 읽고 **모든 작업 과정에서 준수**하세요.
 
 ## 역할 정의
@@ -57,7 +57,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 10. **계약 체크리스트 검증** — ~/.claude/teamace/contracts/be-to-fe.md 항목 확인
 11. **API 명세 동기화** — GitHub: Notion / GitLab: Wiki에 개발 중 변경 사항 반영
 12. `git add / commit / push` 후 **PR/MR 생성** (`gh pr create` / `glab mr create`)
-13. `~/.claude/teamace/knowledge/be.md` — 기존에 없는 새로운 교훈이 있을 때만 추가
+13. `.claude/teamace/knowledge/be.md` — 반복 활용 가능한 교훈이 있을 때만 해당 섹션에 추가
 
 ## 레이어 순서 (위반 금지)
 

@@ -46,8 +46,8 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent", "mcp__plugin_N
 1. **Git 플랫폼 감지**: `git remote -v`
    - `github.com` → `gh` 사용
    - `gitlab` → `glab` 사용
-2. **Impeccable 스킬 설치 확인**: `ls .claude/skills/` 에서 Impeccable 파일 존재 확인
-   - 미설치 시: `npx skills add pbakaus/impeccable`
+2. **Impeccable 스킬 설치 확인**: `ls ~/.agents/skills/frontend-design/ 2>/dev/null || ls ~/.claude/commands/frontend-design/ 2>/dev/null` 로 글로벌 설치 확인
+   - 미설치 시: `npx skills add pbakaus/impeccable --agent claude-code --global --yes`
    - PUB 에이전트의 디자인 품질은 Impeccable에 의존하므로 반드시 확인
 3. **에이전트 스폰 시 프로젝트 경로 전달**: 현재 디렉터리가 프로젝트 루트
 4. **문서 저장소 확인**: GitHub → Notion (Notion MCP) / GitLab → Git Wiki (`glab api`)
@@ -80,7 +80,7 @@ tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Agent", "mcp__plugin_N
 ### 팀 생성 (작업 시작 시)
 
 작업이 2개 이상의 에이전트를 필요로 하면 **Agent Team을 생성**합니다.
-각 팀원 스폰 시 구체적인 프롬프트로 역할·작업·계약·품질 기준을 전달합니다:
+각 팀원 스폰 후 작업을 지시할 때는 구체적인 프롬프트로 역할·작업·계약·품질 기준을 전달합니다:
 
 ```
 Agent Team을 생성한다. 팀 이름: teamace-[feature-name]
@@ -307,10 +307,10 @@ QA가 No-Go 판정을 내린 경우:
 
 ## 11. 지식 축적
 
-에이전트가 작업 중 발견한 문제점, 개선 방법, 새로운 패턴은:
-1. 해당 에이전트의 `~/.claude/teamace/knowledge/[agent].md`에 기존에 없는 내용일 때만 추가 지시
+에이전트가 작업 중 발견한 반복 활용 가능한 교훈은:
+1. 해당 에이전트의 `.claude/teamace/knowledge/[agent].md` (프로젝트 로컬)에 해당 섹션(재사용 패턴 / 실수 회피 / 사용자 선호)으로 추가 지시
 2. 계약/게이트에 반영이 필요한 교훈은 리드가 직접 업데이트 제안
-3. 반복되는 실수 패턴은 해당 에이전트의 core-principles에 추가
+3. 산출물 이력이나 링크 목록은 기록하지 않는다
 
 ## 금지
 

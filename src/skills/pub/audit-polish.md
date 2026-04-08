@@ -4,8 +4,8 @@
 구현된 View 코드를 Impeccable 커맨드(`/audit` + `/polish`)로 심사하고 품질을 끌어올린다.
 
 ## 전제 조건
-- Impeccable 스킬이 프로젝트에 설치되어 있어야 함 (`.claude/skills/`)
-- 설치 확인: `.claude/skills/` 내 `frontend-design` 스킬 + 레퍼런스 파일 존재
+- Impeccable 스킬이 글로벌 설치되어 있어야 함 (`~/.agents/skills/frontend-design/` 또는 `~/.claude/commands/frontend-design/`)
+- 설치 확인: `ls ~/.agents/skills/frontend-design/ 2>/dev/null || ls ~/.claude/commands/frontend-design/ 2>/dev/null`
 
 ## 트리거
 - View 컴포넌트 구현 완료 후 (PR 제출 전 필수)

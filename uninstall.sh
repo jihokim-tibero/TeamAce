@@ -45,6 +45,39 @@ if [ -f "$CLAUDE_DIR/CLAUDE.md" ]; then
   echo -e "${GREEN}[✓]${NC} CLAUDE.md 정리"
 fi
 
+# Remove Impeccable global skill
+IMPECCABLE_REMOVED=0
+if [ -d "$HOME/.agents/skills/frontend-design" ]; then
+  rm -rf "$HOME/.agents/skills/frontend-design"
+  IMPECCABLE_REMOVED=1
+fi
+if [ -d "$HOME/.claude/commands/frontend-design" ]; then
+  rm -rf "$HOME/.claude/commands/frontend-design"
+  IMPECCABLE_REMOVED=1
+fi
+for f in "$HOME"/.claude/commands/*impeccable* 2>/dev/null; do
+  [ -e "$f" ] && rm -rf "$f" && IMPECCABLE_REMOVED=1
+done
+if [ "$IMPECCABLE_REMOVED" -eq 1 ]; then
+  echo -e "${GREEN}[✓]${NC} Impeccable 글로벌 스킬 제거"
+else
+  echo -e "${YELLOW}[–]${NC} Impeccable 글로벌 스킬 없음 (건너뜀)"
+fi
+
+# Remove Agent Team env from settings.json
+if [ -f "$CLAUDE_DIR/settings.json" ]; then
+  node -e "
+    const fs = require('fs');
+    const s = JSON.parse(fs.readFileSync('$CLAUDE_DIR/settings.json', 'utf8'));
+    if (s.env) {
+      delete s.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+      if (Object.keys(s.env).length === 0) delete s.env;
+    }
+    fs.writeFileSync('$CLAUDE_DIR/settings.json', JSON.stringify(s, null, 2));
+  " 2>/dev/null
+  echo -e "${GREEN}[✓]${NC} settings.json 정리"
+fi
+
 # Remove CLI
 rm -f "$HOME/.local/bin/teamace"
 echo -e "${GREEN}[✓]${NC} CLI 제거"
@@ -53,5 +86,5 @@ echo ""
 echo -e "${GREEN}TeamAce가 완전히 제거되었습니다.${NC}"
 echo ""
 echo "참고: 각 프로젝트의 CLAUDE.md에서 TeamAce 참조는 수동으로 제거해주세요."
-echo "참고: 각 프로젝트의 Impeccable 스킬(.claude/skills/)은 유지됩니다."
+echo "      → 'teamace clean' 을 각 프로젝트에서 실행하면 자동 정리됩니다."
 echo ""
