@@ -1258,6 +1258,17 @@ cmd_init() {
       echo ""
       echo "## 프로젝트별 규칙"
       echo ""
+      echo "### 네이밍 규약"
+      echo ""
+      echo '- **API JSON 키 (요청/응답 필드)**: `camelCase` — FE-BE 계약. 예: `businessName`, `userId`'
+      echo '- **클래스명** (모든 언어): `PascalCase` — 예: `UserService`'
+      echo '- **상수** (모든 언어): `UPPER_SNAKE_CASE` — 예: `MAX_RETRY_COUNT`'
+      echo '- **TS/JS/Java 내부 변수·함수**: `camelCase` — 언어 표준'
+      echo '- **Python 내부 변수·함수**: `snake_case` — PEP 8 표준'
+      echo '- **DB 컬럼**: `snake_case` (SQL 관례)'
+      echo '- **약어 금지**: `businessName` O, `bizNm` X'
+      echo '- **Python 백엔드는 Pydantic `alias_generator`로 snake_case ↔ camelCase 변환** — 내부는 snake_case, API 경계에서 camelCase'
+      echo ""
       echo "### 린트·정적분석 설정 변경 금지"
       echo ""
       echo "ESLint, tsconfig, Checkstyle, Ruff, mypy 등의 규칙·옵션을 에이전트가 임의로 추가·제거·완화하지 않는다."
