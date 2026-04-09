@@ -391,20 +391,7 @@ MYPYEOF
     need_install=1
   fi
 
-  # 3) commitlint (pre-commit 훅에서 사용)
-  local has_commitlint=0
-  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
-    [ -f "$f" ] && has_commitlint=1 && break
-  done
-  if [ "$has_commitlint" -eq 1 ]; then
-    ok "    → commitlint: 설정 이미 존재"
-  else
-    echo "export default { extends: ['@commitlint/config-conventional'] };" > "$dir/commitlint.config.mjs"
-    ok "    → commitlint: commitlint.config.mjs 생성 완료"
-    need_install=1
-  fi
-
-  # 4) 패키지 설치
+  # 3) 패키지 설치
   if [ "$need_install" -eq 1 ]; then
     info "    패키지 설치 중..."
     local pip_cmd="pip3"
@@ -986,8 +973,6 @@ _show_module_status() {
         echo -e "      ${YELLOW}.pre-commit-config.yaml${NC}: 없음 (기대: 루트 또는 모듈에 있음)"
         diff_count=$((diff_count+1))
       fi
-      [ ! -f "$dir/commitlint.config.mjs" ] && ! ls "$dir"/commitlint.config.* "$dir"/.commitlintrc* >/dev/null 2>&1 && echo -e "      ${YELLOW}commitlint 설정${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
-
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
       ;;
 
