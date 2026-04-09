@@ -1057,6 +1057,18 @@ _show_module_status() {
         diff_count=$((diff_count+1))
       fi
 
+      # 빌드 플러그인 존재 여부
+      if [ -n "$build_file" ]; then
+        if ! grep -q "checkstyle" "$build_file" 2>/dev/null; then
+          echo -e "      ${RED}빌드 플러그인 checkstyle${NC}: 없음 (기대: 있음 — 빌드 시 스타일 검사)"
+          diff_count=$((diff_count+1))
+        fi
+        if ! grep -q "spotless" "$build_file" 2>/dev/null; then
+          echo -e "      ${RED}빌드 플러그인 spotless${NC}: 없음 (기대: 있음 — 빌드 시 포맷 검사)"
+          diff_count=$((diff_count+1))
+        fi
+      fi
+
       # 빌드 설정 — ignoreFailures / enforceCheck 감지
       if [ -n "$build_file" ]; then
         if grep -qiE "ignoreFailures\s*=\s*true" "$build_file" 2>/dev/null; then
