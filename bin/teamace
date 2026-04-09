@@ -391,11 +391,45 @@ MYPYEOF
     need_install=1
   fi
 
-  # 3) pre-commit
-  if [ -f "$dir/.pre-commit-config.yaml" ]; then
-    ok "    → pre-commit: 설정 이미 존재"
+  # 3) commitlint (pre-commit 훅에서 사용)
+  local has_commitlint=0
+  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
+    [ -f "$f" ] && has_commitlint=1 && break
+  done
+  if [ "$has_commitlint" -eq 1 ]; then
+    ok "    → commitlint: 설정 이미 존재"
   else
-    cat > "$dir/.pre-commit-config.yaml" << 'PCEOF'
+    echo "export default { extends: ['@commitlint/config-conventional'] };" > "$dir/commitlint.config.mjs"
+    ok "    → commitlint: commitlint.config.mjs 생성 완료"
+    need_install=1
+  fi
+
+  # 4) 패키지 설치
+  if [ "$need_install" -eq 1 ]; then
+    info "    패키지 설치 중..."
+    local pip_cmd="pip3"
+    command -v pip3 >/dev/null 2>&1 || pip_cmd="pip"
+
+    if ($pip_cmd install ruff mypy pre-commit >/dev/null 2>&1); then
+      ok "    → pip 패키지 설치 완료 (ruff, mypy, pre-commit)"
+    else
+      warn "    → pip 설치 실패 — 수동 실행: $pip_cmd install ruff mypy pre-commit"
+    fi
+  fi
+
+  # NOTE: pre-commit config 생성 및 install은 setup_toolchain에서
+  # git 루트 기준으로 한 번만 수행 (모노레포에서 서브모듈별 install 금지)
+}
+
+# pre-commit config를 git 루트에 생성 + install + autoupdate
+# $1 = git 루트 디렉터리
+_setup_precommit_root() {
+  local git_root="$1"
+
+  if [ -f "$git_root/.pre-commit-config.yaml" ]; then
+    ok "  → pre-commit: 루트 설정 이미 존재"
+  else
+    cat > "$git_root/.pre-commit-config.yaml" << 'PCEOF'
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.0.0
@@ -416,54 +450,27 @@ repos:
     hooks:
       - id: config-guard
         name: TeamAce Config Guard
-        entry: bash -c 'failed=0; if [ -f pyproject.toml ] && ! grep -q "strict\s*=\s*true\|strict\s*=\s*True" pyproject.toml 2>/dev/null; then echo "[Config Guard] mypy strict 모드가 비활성화되어 있습니다."; failed=1; fi; if [ -f mypy.ini ] && ! grep -q "strict\s*=\s*True" mypy.ini 2>/dev/null; then echo "[Config Guard] mypy strict 모드가 비활성화되어 있습니다."; failed=1; fi; exit $failed'
+        entry: bash -c 'failed=0; for f in $(find . -maxdepth 3 -name pyproject.toml -o -name mypy.ini | grep -v node_modules); do if grep -qiE "^\[tool\.mypy\]|^\[mypy\]" "$f" 2>/dev/null && ! grep -qiE "strict\s*=\s*(true|True)" "$f" 2>/dev/null; then echo "[Config Guard] $f: mypy strict 비활성"; failed=1; fi; done; exit $failed'
         language: system
         always_run: true
         pass_filenames: false
 PCEOF
-    ok "    → pre-commit: .pre-commit-config.yaml 생성 완료"
-    need_install=1
+    ok "  → pre-commit: 루트 .pre-commit-config.yaml 생성 완료"
   fi
 
-  # 4) commitlint (pre-commit 훅에서 사용)
-  local has_commitlint=0
-  for f in "$dir"/commitlint.config.{js,cjs,mjs,ts} "$dir"/.commitlintrc{,.js,.cjs,.json,.yml,.yaml}; do
-    [ -f "$f" ] && has_commitlint=1 && break
-  done
-  if [ "$has_commitlint" -eq 1 ]; then
-    ok "    → commitlint: 설정 이미 존재"
-  else
-    echo "export default { extends: ['@commitlint/config-conventional'] };" > "$dir/commitlint.config.mjs"
-    ok "    → commitlint: commitlint.config.mjs 생성 완료"
-    need_install=1
-  fi
-
-  # 5) 패키지 설치 + 버전 최신화
-  if [ "$need_install" -eq 1 ]; then
-    info "    패키지 설치 중..."
-    local pip_cmd="pip3"
-    command -v pip3 >/dev/null 2>&1 || pip_cmd="pip"
-
-    if ($pip_cmd install ruff mypy pre-commit >/dev/null 2>&1); then
-      ok "    → pip 패키지 설치 완료 (ruff, mypy, pre-commit)"
+  # autoupdate
+  if command -v pre-commit >/dev/null 2>&1; then
+    info "  pre-commit 훅 버전 최신화 중..."
+    if (cd "$git_root" && pre-commit autoupdate >/dev/null 2>&1); then
+      ok "  → pre-commit autoupdate 완료"
     else
-      warn "    → pip 설치 실패 — 수동 실행: $pip_cmd install ruff mypy pre-commit"
-    fi
-  fi
-
-  # 6) pre-commit autoupdate (설정이 있으면 항상 최신화 시도)
-  if [ -f "$dir/.pre-commit-config.yaml" ] && command -v pre-commit >/dev/null 2>&1; then
-    info "    pre-commit 훅 버전 최신화 중..."
-    if (cd "$dir" && pre-commit autoupdate >/dev/null 2>&1); then
-      ok "    → pre-commit autoupdate 완료"
-    else
-      warn "    → pre-commit autoupdate 실패 (네트워크 확인)"
+      warn "  → pre-commit autoupdate 실패 (네트워크 확인)"
     fi
 
-    if (cd "$dir" && pre-commit install >/dev/null 2>&1 && pre-commit install --hook-type commit-msg >/dev/null 2>&1); then
-      ok "    → pre-commit 훅 설치 완료"
+    if (cd "$git_root" && pre-commit install >/dev/null 2>&1 && pre-commit install --hook-type commit-msg >/dev/null 2>&1); then
+      ok "  → pre-commit 훅 설치 완료 (루트)"
     else
-      warn "    → pre-commit 훅 설치 실패 — 수동 실행: cd $dir && pre-commit install && pre-commit install --hook-type commit-msg"
+      warn "  → pre-commit 훅 설치 실패 — 수동 실행: cd $git_root && pre-commit install"
     fi
   fi
 }
@@ -713,11 +720,17 @@ setup_toolchain() {
     [ -n "$mod" ] && modules+=("$mod")
   done < <(find_modules "$dir")
 
+  local has_python=0
+  local git_root=""
+  # git 루트 찾기
+  git_root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || git_root="$dir"
+
   if [ ${#modules[@]} -gt 0 ]; then
     # 하위 모듈 발견 → 각 모듈별로 설치
     for mod in "${modules[@]}"; do
       local rel="${mod#$dir/}"
       _run_setup "$mod" "$rel"
+      [ "$(detect_stack "$mod")" = "python" ] && has_python=1
     done
   elif [ "$stack" != "unknown" ]; then
     # 루트에만 스택 존재
@@ -732,9 +745,16 @@ setup_toolchain() {
         java-gradle) setup_toolchain_java "$dir" "gradle" ;;
       esac
     fi
+    [ "$stack" = "python" ] && has_python=1
   else
     [ -n "$label" ] && info "  ${label}: 지원 스택 감지 안 됨 (건너뜀)"
     info "  지원 스택 없음 (node/python/java)"
+  fi
+
+  # Python 모듈이 있으면 git 루트에 pre-commit config + install (한 번만)
+  if [ "$has_python" -eq 1 ]; then
+    echo ""
+    _setup_precommit_root "$git_root"
   fi
 }
 
@@ -874,9 +894,17 @@ _show_module_status() {
         echo -e "    mypy:        ${YELLOW}없음${NC}"
       fi
 
-      if [ -f "$dir/.pre-commit-config.yaml" ]; then
+      # pre-commit config는 모듈 또는 git 루트에서 찾기
+      local pc_cfg=""
+      [ -f "$dir/.pre-commit-config.yaml" ] && pc_cfg="$dir/.pre-commit-config.yaml"
+      if [ -z "$pc_cfg" ]; then
+        local _gr
+        _gr=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || true
+        [ -n "$_gr" ] && [ -f "$_gr/.pre-commit-config.yaml" ] && pc_cfg="$_gr/.pre-commit-config.yaml"
+      fi
+      if [ -n "$pc_cfg" ]; then
         local pc_revs
-        pc_revs=$(grep "rev:" "$dir/.pre-commit-config.yaml" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')
+        pc_revs=$(grep "rev:" "$pc_cfg" 2>/dev/null | awk '{print $2}' | tr '\n' ' ' || true)
         echo -e "    pre-commit:  ${GREEN}설정됨${NC} (${pc_revs})"
       else
         echo -e "    pre-commit:  ${YELLOW}없음${NC}"
@@ -945,7 +973,11 @@ _show_module_status() {
       fi
 
       # pre-commit config
-      [ ! -f "$dir/.pre-commit-config.yaml" ] && echo -e "      ${YELLOW}.pre-commit-config.yaml${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
+      # pre-commit config는 모듈 또는 git 루트에서 찾기
+      if [ -z "$pc_cfg" ]; then
+        echo -e "      ${YELLOW}.pre-commit-config.yaml${NC}: 없음 (기대: 루트 또는 모듈에 있음)"
+        diff_count=$((diff_count+1))
+      fi
       [ ! -f "$dir/commitlint.config.mjs" ] && ! ls "$dir"/commitlint.config.* "$dir"/.commitlintrc* >/dev/null 2>&1 && echo -e "      ${YELLOW}commitlint 설정${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
 
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
