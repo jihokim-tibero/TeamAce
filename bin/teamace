@@ -441,16 +441,24 @@ repos:
     rev: v0.0.0
     hooks:
       - id: mypy
-  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-    rev: v0.0.0
-    hooks:
-      - id: commitlint
-        stages: [commit-msg]
   - repo: local
     hooks:
       - id: config-guard
         name: TeamAce Config Guard
-        entry: bash -c 'failed=0; for f in $(find . -maxdepth 3 -name pyproject.toml -o -name mypy.ini | grep -v node_modules); do if grep -qiE "^\[tool\.mypy\]|^\[mypy\]" "$f" 2>/dev/null && ! grep -qiE "strict\s*=\s*(true|True)" "$f" 2>/dev/null; then echo "[Config Guard] $f: mypy strict 비활성"; failed=1; fi; done; exit $failed'
+        entry: bash
+        args:
+          - -c
+          - |
+            failed=0
+            for f in $(find . -maxdepth 3 \( -name pyproject.toml -o -name mypy.ini \) ! -path '*/node_modules/*'); do
+              if grep -qiE '^\[tool\.mypy\]|^\[mypy\]' "$f" 2>/dev/null; then
+                if ! grep -qiE 'strict\s*=\s*(true|True)' "$f" 2>/dev/null; then
+                  echo "[Config Guard] $f: mypy strict 비활성"
+                  failed=1
+                fi
+              fi
+            done
+            exit $failed
         language: system
         always_run: true
         pass_filenames: false
@@ -467,7 +475,7 @@ PCEOF
       warn "  → pre-commit autoupdate 실패 (네트워크 확인)"
     fi
 
-    if (cd "$git_root" && pre-commit install >/dev/null 2>&1 && pre-commit install --hook-type commit-msg >/dev/null 2>&1); then
+    if (cd "$git_root" && pre-commit install >/dev/null 2>&1); then
       ok "  → pre-commit 훅 설치 완료 (루트)"
     else
       warn "  → pre-commit 훅 설치 실패 — 수동 실행: cd $git_root && pre-commit install"
