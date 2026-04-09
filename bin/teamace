@@ -958,9 +958,23 @@ _show_module_status() {
             diff_count=$((diff_count+1))
           fi
         done
-        # strict 하위 옵션이 명시적 false
+        # strict 하위 옵션이 글로벌 [tool.mypy] 섹션에서 명시적 false
+        # (per-module [[tool.mypy.overrides]] 안의 예외는 정당하므로 제외)
         for opt in disallow_untyped_defs disallow_untyped_calls disallow_incomplete_defs; do
-          if grep -qiE "${opt}\s*=\s*(false|False)" "$mypy_cfg" 2>/dev/null; then
+          local in_global=0
+          if [ "${mypy_cfg##*.}" = "ini" ]; then
+            # .ini: [mypy] 섹션과 [mypy-*] 오버라이드 구분
+            # [mypy] 직후 ~ 다음 [ 사이에서만 검색
+            if sed -n '/^\[mypy\]$/,/^\[/p' "$mypy_cfg" 2>/dev/null | grep -qiE "${opt}\s*=\s*(false|False)"; then
+              in_global=1
+            fi
+          else
+            # pyproject.toml: [tool.mypy] 섹션과 [[tool.mypy.overrides]] 구분
+            if sed -n '/^\[tool\.mypy\]$/,/^\[/p' "$mypy_cfg" 2>/dev/null | grep -qiE "${opt}\s*=\s*(false|False)"; then
+              in_global=1
+            fi
+          fi
+          if [ "$in_global" -eq 1 ]; then
             echo -e "      ${RED}mypy ${opt}${NC}: false (기대: strict에 의해 true)"
             diff_count=$((diff_count+1))
           fi
