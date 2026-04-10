@@ -471,6 +471,18 @@ PCEOF
     ok "  → pre-commit: 루트 .pre-commit-config.yaml 생성 완료"
   fi
 
+  # .gitignore에 mypy/ruff 캐시 추가 (pre-commit stash/restore race 완화)
+  local gitignore="$git_root/.gitignore"
+  touch "$gitignore"
+  local ignore_added=0
+  for pat in ".mypy_cache/" ".ruff_cache/" ".pytest_cache/" "__pycache__/"; do
+    if ! grep -qxF "$pat" "$gitignore" 2>/dev/null; then
+      echo "$pat" >> "$gitignore"
+      ignore_added=1
+    fi
+  done
+  [ "$ignore_added" -eq 1 ] && ok "  → .gitignore: Python 캐시 디렉터리 추가"
+
   # autoupdate
   if command -v pre-commit >/dev/null 2>&1; then
     info "  pre-commit 훅 버전 최신화 중..."
@@ -1294,6 +1306,14 @@ cmd_init() {
       echo "- 린트 에러 발생 시 **코드를 규칙에 맞게 수정**한다 (규칙을 끄지 않는다)"
       echo "- 규칙 자체의 조정이 필요하다고 판단되면 사용자에게 보고하고 승인을 받은 후에만 변경한다"
       echo '- `// eslint-disable`, `# type: ignore`, `@SuppressWarnings` 등 인라인 억제도 동일 — 사유를 명시하고 사용자 승인 필수'
+      echo ""
+      echo "### 동시 커밋 금지 — worktree 격리"
+      echo ""
+      echo "병렬 에이전트가 같은 working tree에서 \`git commit\`을 동시에 실행하면 pre-commit의 stash/restore race로 **index가 뒤바뀌거나 혼재된 commit**이 생성됩니다. pre-commit의 알려진 한계."
+      echo ""
+      echo "- **커밋을 수반하는 병렬 에이전트는 반드시 \`isolation: \"worktree\"\`로 스폰**"
+      echo "- **머지는 Lead가 직렬화** — 동시 머지 금지"
+      echo "- 단일 에이전트 또는 읽기 전용 작업은 worktree 불필요"
       echo ""
     } > "$project_claude"
 
