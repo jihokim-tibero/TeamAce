@@ -424,12 +424,30 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.0.0
-    hooks:
-      - id: mypy
   - repo: local
     hooks:
+      # mypy는 프로젝트 venv의 mypy 사용 (mirrors-mypy의 격리 venv는
+      # 프로젝트 의존성에 접근 못해 ignore_missing_imports가 효과 없음).
+      # 모노레포 대응: 각 Python 모듈 디렉터리에서 독립적으로 실행
+      # (루트 일괄 실행은 모듈명 충돌 유발).
+      - id: mypy
+        name: mypy (per-module)
+        entry: bash
+        language: system
+        pass_filenames: false
+        always_run: true
+        args:
+          - -c
+          - |
+            failed=0
+            for cfg in $(find . -maxdepth 3 \( -name pyproject.toml -o -name mypy.ini \) ! -path '*/node_modules/*' ! -path '*/.venv/*' ! -path '*/venv/*'); do
+              mod=$(dirname "$cfg")
+              if grep -qiE '^\[tool\.mypy\]|^\[mypy\]' "$cfg" 2>/dev/null; then
+                echo "[mypy] $mod"
+                (cd "$mod" && mypy .) || failed=1
+              fi
+            done
+            exit $failed
       - id: config-guard
         name: TeamAce Config Guard
         entry: bash
