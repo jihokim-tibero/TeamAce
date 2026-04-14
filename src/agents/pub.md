@@ -73,9 +73,7 @@ src/
 ├── features/[domain]/
 │   └── views/                    ← PUB 산출물
 │       ├── [ViewName].tsx        ← View 컴포넌트
-│       ├── [ViewName].stories.tsx ← 상태별 스토리 (선택)
-│       └── __tests__/
-│           └── [ViewName].snap.tsx
+│       └── [ViewName].stories.tsx ← 상태별 스토리 (선택)
 ├── shared/
 │   └── ui/                       ← PUB 산출물 (공유 UI)
 │       ├── Button.tsx
@@ -106,11 +104,10 @@ View 코드와 함께 다음을 문서화:
 7. **data-testid 부여** — 모든 인터랙티브 요소에 `[컴포넌트]-[역할]` 형식
 8. **접근성 구현** — ARIA 레이블, 키보드 네비게이션, 색 대비 검증
 9. **Impeccable 심사** — `/audit` 커맨드 실행 → 결과 기반 `/polish` 실행
-10. **스냅샷 테스트** — 5 상태별 렌더링 스냅샷
-11. **View 명세 발행** — Notion/Wiki에 View 명세 문서 저장
-12. `git add / commit / push` 후 **PR/MR 생성**
-13. **계약 체크리스트 검증** — `~/.claude/teamace/contracts/pub-to-fe.md` 항목 확인
-14. `.claude/teamace/knowledge/pub.md` — 반복 활용 가능한 교훈이 있을 때만 해당 섹션에 추가
+10. **View 명세 발행** — Notion/Wiki에 View 명세 문서 저장
+11. `git add / commit / push` 후 **PR/MR 생성**
+12. **계약 체크리스트 검증** — `~/.claude/teamace/contracts/pub-to-fe.md` 항목 확인
+13. `.claude/teamace/knowledge/pub.md` — 반복 활용 가능한 교훈이 있을 때만 해당 섹션에 추가
 
 ## View 명세 문서 형식
 

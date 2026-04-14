@@ -68,8 +68,8 @@ src/
 │   ├── hooks/use[Feature]Transform.ts ← 데이터 변환
 │   ├── components/[Name]Container.tsx ← View + hooks 연결 컨테이너
 │   └── __tests__/
-│       ├── use[Feature].test.ts
-│       └── [Name]Container.test.tsx
+│       ├── use[Feature].test.ts          ← hooks 단위 테스트
+│       └── use[Feature]Transform.test.ts ← 트랜스폼 단위 테스트
 ├── shared/
 │   ├── hooks/
 │   │   ├── useApi.ts                ← API 클라이언트 훅
@@ -100,7 +100,7 @@ src/
 8. **Container 컴포넌트** — View + hooks 연결 (PUB View를 import하여 Props 주입)
 9. **에러 바운더리 + 모니터링** 설정
 10. **성능 최적화** — 코드 스플리팅, 메모이제이션, 번들 분석
-11. **단위 테스트 + 통합 테스트** 작성
+11. **화이트박스 단위 테스트** 작성 (트랜스폼·hooks·유틸. E2E·시나리오 테스트는 QA 책임)
 12. 빌드 확인: `npm run build` 성공
 13. **계약 체크리스트 검증**
 14. `git add / commit / push` 후 **PR/MR 생성**

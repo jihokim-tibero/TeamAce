@@ -69,7 +69,7 @@
 
 5. 모든 결과물 URL 확보 → 완료 신호:
    ```
-   [QA DONE] TC: [N]개 (Critical: N, High: N) | Notion/Wiki: [URL] | 회귀: PASS | 스냅샷: PASS | 판정: Go/No-Go
+   [QA DONE] TC: [N]개 (Critical: N, High: N) | Notion/Wiki: [URL] | 회귀: PASS | 판정: Go/No-Go
    ```
 
 ## 출력

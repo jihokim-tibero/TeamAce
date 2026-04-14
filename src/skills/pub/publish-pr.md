@@ -63,7 +63,6 @@
    - [ ] 타입 명시 완료 (any 없음)
    - [ ] data-testid 전체 추가
    - [ ] 모든 상태(idle/loading/success/error/empty) 구현
-   - [ ] 스냅샷 테스트 작성
    - [ ] View에 비즈니스 로직 없음
    - [ ] 빌드 성공
    EOF

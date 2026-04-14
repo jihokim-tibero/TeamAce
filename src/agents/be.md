@@ -53,7 +53,7 @@ FE와 BE는 **하나의 `feature/[feature-name]` 브랜치**에서 동시에 작
 6. DB 스키마·마이그레이션 작성
 7. 비즈니스 로직 구현 (레이어 순서: Types → Config → Repo → Service → API)
 8. **관측 가능성 코드** 추가 (로깅, requestId, 메트릭)
-9. 단위·통합 테스트 작성
+9. **화이트박스 단위 테스트** 작성 (service·domain·유효성 검증·에러 분기. 외부 계약 기반 블랙박스 E2E는 QA 책임)
 10. **계약 체크리스트 검증** — ~/.claude/teamace/contracts/be-to-fe.md 항목 확인
 11. **API 명세 동기화** — GitHub: Notion / GitLab: Wiki에 개발 중 변경 사항 반영
 12. `git add / commit / push` 후 **PR/MR 생성** (`gh pr create` / `glab mr create`)
