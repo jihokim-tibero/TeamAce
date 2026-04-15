@@ -21,6 +21,9 @@ ok()    { echo -e "${GREEN}[TeamAce]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[TeamAce]${NC} $1"; }
 err()   { echo -e "${RED}[TeamAce]${NC} $1" >&2; }
 
+# 설정 비교 diff 아래에 "→ 조치: ..." 행을 출력
+fix()   { echo -e "        ${CYAN}→ 조치:${NC} $1"; }
+
 check_installed() {
   if [ ! -f "$VERSION_FILE" ]; then
     err "TeamAce가 설치되어 있지 않습니다. install.sh를 먼저 실행하세요."
@@ -79,7 +82,10 @@ check_agent_team() {
 # Impeccable 설치 여부 확인 (글로벌 + 프로젝트 레벨)
 check_impeccable() {
   local project="${1:-.}"
-  # 글로벌: ~/.agents/skills/ (npx skills add --global)
+  # 글로벌: ~/.claude/skills/ (현재 npx skills add --global 기본 경로)
+  [ -d "$HOME/.claude/skills/impeccable" ] && return 0
+  ls "$HOME"/.claude/skills/*impeccable* &>/dev/null 2>&1 && return 0
+  # 글로벌: ~/.agents/skills/ (레거시 경로)
   ls "$HOME"/.agents/skills/*impeccable* &>/dev/null 2>&1 && return 0
   [ -d "$HOME/.agents/skills/frontend-design" ] && return 0
   # 글로벌: ~/.claude/commands/ (Claude Code symlink)
@@ -800,8 +806,15 @@ _show_module_status() {
         [ -f "$f" ] && has=1 && break
       done
       if [ "$has" -eq 1 ]; then
-        local eslint_ver
-        eslint_ver=$(node -e "try{console.log(require('$dir/node_modules/eslint/package.json').version)}catch(e){}" 2>/dev/null)
+        local eslint_ver=""
+        local probe="$dir"
+        while [ -n "$probe" ] && [ "$probe" != "/" ]; do
+          if [ -f "$probe/node_modules/eslint/package.json" ]; then
+            eslint_ver=$(node -e "try{console.log(require('$probe/node_modules/eslint/package.json').version)}catch(e){}" 2>/dev/null)
+            [ -n "$eslint_ver" ] && break
+          fi
+          probe=$(dirname "$probe")
+        done
         [ -n "$eslint_ver" ] && echo -e "    ESLint:      ${GREEN}${eslint_ver}${NC}" || echo -e "    ESLint:      ${GREEN}설정됨${NC}"
       else
         echo -e "    ESLint:      ${YELLOW}없음${NC}"
@@ -847,6 +860,8 @@ _show_module_status() {
         if [ -n "$ts_diffs" ]; then
           while IFS='|' read -r item cur expect; do
             echo -e "      ${RED}${item}${NC}: ${cur:-없음} (기대: ${expect})"
+            local key="${item#tsconfig }"
+            fix "${dir}/tsconfig.json 의 compilerOptions.${key} 를 ${expect} 로 설정"
             diff_count=$((diff_count+1))
           done <<< "$ts_diffs"
         fi
@@ -870,28 +885,44 @@ _show_module_status() {
           local exp="${eslint_expect[$rule]}"
           if ! grep -q "$rule" "$eslint_cfg" 2>/dev/null; then
             echo -e "      ${RED}eslint ${rule}${NC}: 없음 (기대: ${exp})"
+            fix "${eslint_cfg} 의 rules 에 '${rule}': '${exp}' 추가"
             diff_count=$((diff_count+1))
           elif grep -qE "['\"]${rule}['\"].*['\"]off['\"]|['\"]${rule}['\"].*:\s*0" "$eslint_cfg" 2>/dev/null; then
             echo -e "      ${RED}eslint ${rule}${NC}: off (기대: ${exp})"
+            fix "${eslint_cfg} 의 rules 에서 '${rule}' 값을 '${exp}' 로 변경"
             diff_count=$((diff_count+1))
           fi
         done
         # ignores
         if ! grep -q "dist" "$eslint_cfg" 2>/dev/null; then
           echo -e "      ${YELLOW}eslint ignores${NC}: dist/** 없음 (기대: 포함)"
+          fix "${eslint_cfg} 의 ignores 배열에 'dist/**' 추가"
           diff_count=$((diff_count+1))
         fi
         # globals (browser/node 환경)
         if ! grep -q "globals" "$eslint_cfg" 2>/dev/null; then
           echo -e "      ${YELLOW}eslint globals${NC}: 없음 (기대: browser + node 환경 선언)"
+          fix "${eslint_cfg} 에 'import globals from \"globals\"' 후 languageOptions.globals 에 browser/node 선언"
           diff_count=$((diff_count+1))
         fi
       fi
 
       # Husky hooks
-      [ ! -f "$dir/.husky/pre-commit" ] && echo -e "      ${YELLOW}.husky/pre-commit${NC}: 없음 (기대: config guard + eslint + tsc)" && diff_count=$((diff_count+1))
-      [ ! -f "$dir/.husky/commit-msg" ] && echo -e "      ${YELLOW}.husky/commit-msg${NC}: 없음 (기대: commitlint)" && diff_count=$((diff_count+1))
-      [ ! -f "$dir/.husky/pre-push" ] && echo -e "      ${YELLOW}.husky/pre-push${NC}: 없음 (기대: main 차단)" && diff_count=$((diff_count+1))
+      if [ ! -f "$dir/.husky/pre-commit" ]; then
+        echo -e "      ${YELLOW}.husky/pre-commit${NC}: 없음 (기대: config guard + eslint + tsc)"
+        fix "'teamace init' 재실행하여 Husky pre-commit 훅 복원"
+        diff_count=$((diff_count+1))
+      fi
+      if [ ! -f "$dir/.husky/commit-msg" ]; then
+        echo -e "      ${YELLOW}.husky/commit-msg${NC}: 없음 (기대: commitlint)"
+        fix "'teamace init' 재실행하여 Husky commit-msg 훅 복원"
+        diff_count=$((diff_count+1))
+      fi
+      if [ ! -f "$dir/.husky/pre-push" ]; then
+        echo -e "      ${YELLOW}.husky/pre-push${NC}: 없음 (기대: main 차단)"
+        fix "'teamace init' 재실행하여 Husky pre-push 훅 복원"
+        diff_count=$((diff_count+1))
+      fi
 
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
       ;;
@@ -949,12 +980,14 @@ _show_module_status() {
           local cur_ll
           cur_ll=$(grep -oP "line-length\s*=\s*\K[0-9]+" "$ruff_cfg" 2>/dev/null | head -1 || true)
           echo -e "      ${YELLOW}ruff line-length${NC}: ${cur_ll:-없음} (기대: 120)"
+          fix "${ruff_cfg} 의 [tool.ruff] 섹션에 line-length = 120 설정"
           diff_count=$((diff_count+1))
         fi
         # select 규칙
         for code in E F W I N UP B A C4 SIM; do
           if ! grep -qE "select\s*=.*\"${code}\"" "$ruff_cfg" 2>/dev/null; then
             echo -e "      ${YELLOW}ruff select ${code}${NC}: 없음 (기대: 포함)"
+            fix "${ruff_cfg} 의 [tool.ruff.lint] select 배열에 \"${code}\" 추가"
             diff_count=$((diff_count+1))
           fi
         done
@@ -962,6 +995,7 @@ _show_module_status() {
         for code in E F W I N UP B A C4 SIM; do
           if grep -qE "ignore\s*=.*\"${code}" "$ruff_cfg" 2>/dev/null; then
             echo -e "      ${RED}ruff ignore ${code}${NC}: 포함됨 (기대: 미포함 — select와 충돌)"
+            fix "${ruff_cfg} 의 ignore 배열에서 \"${code}\" 제거"
             diff_count=$((diff_count+1))
           fi
         done
@@ -985,6 +1019,7 @@ _show_module_status() {
             local cur_val
             cur_val=$(grep -oiP "${opt}\s*=\s*\K\S+" "$mypy_cfg" 2>/dev/null | head -1 || true)
             echo -e "      ${RED}mypy ${opt}${NC}: ${cur_val:-없음} (기대: ${exp})"
+            fix "${mypy_cfg} 의 [tool.mypy]/[mypy] 섹션에 ${opt} = ${exp} 설정"
             diff_count=$((diff_count+1))
           fi
         done
@@ -1006,6 +1041,7 @@ _show_module_status() {
           fi
           if [ "$in_global" -eq 1 ]; then
             echo -e "      ${RED}mypy ${opt}${NC}: false (기대: strict에 의해 true)"
+            fix "${mypy_cfg} 의 글로벌 섹션에서 ${opt} = false 제거 (strict가 자동으로 true 설정)"
             diff_count=$((diff_count+1))
           fi
         done
@@ -1015,6 +1051,7 @@ _show_module_status() {
       # pre-commit config는 모듈 또는 git 루트에서 찾기
       if [ -z "$pc_cfg" ]; then
         echo -e "      ${YELLOW}.pre-commit-config.yaml${NC}: 없음 (기대: 루트 또는 모듈에 있음)"
+        fix "'teamace init' 재실행 — git 루트에 .pre-commit-config.yaml 생성"
         diff_count=$((diff_count+1))
       fi
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
@@ -1057,6 +1094,7 @@ _show_module_status() {
           for mod in ConstantName LocalVariableName MemberName MethodName PackageName ParameterName TypeName AvoidStarImport UnusedImports NeedBraces LeftCurly RightCurly WhitespaceAround EmptyBlock MissingSwitchDefault FallThrough UpperEll NewlineAtEndOfFile; do
             if ! grep -q "$mod" "$cs_file" 2>/dev/null; then
               echo -e "      ${RED}checkstyle ${mod}${NC}: 없음 (기대: 있음)"
+              fix "${cs_file} 에 <module name=\"${mod}\"/> 추가"
               diff_count=$((diff_count+1))
             fi
           done
@@ -1066,10 +1104,12 @@ _show_module_status() {
             cur_fl=$(grep -A2 "FileLength" "$cs_file" 2>/dev/null | grep -oP 'value\s*=\s*"\K[0-9]+' || true)
             if [ -n "$cur_fl" ] && [ "$cur_fl" != "700" ]; then
               echo -e "      ${YELLOW}checkstyle FileLength max${NC}: ${cur_fl} (기대: 700)"
+              fix "${cs_file} 의 FileLength 모듈 property value=\"700\" 으로 변경"
               diff_count=$((diff_count+1))
             fi
           else
             echo -e "      ${RED}checkstyle FileLength${NC}: 없음 (기대: max=700)"
+            fix "${cs_file} 에 FileLength 모듈 추가 (<module name=\"FileLength\"><property name=\"max\" value=\"700\"/></module>)"
             diff_count=$((diff_count+1))
           fi
           # WhitespaceAround allowEmpty 옵션
@@ -1077,6 +1117,7 @@ _show_module_status() {
             for prop in allowEmptyTypes allowEmptyConstructors allowEmptyMethods allowEmptyLambdas; do
               if ! grep -q "$prop" "$cs_file" 2>/dev/null; then
                 echo -e "      ${YELLOW}checkstyle WhitespaceAround ${prop}${NC}: 없음 (기대: true)"
+                fix "${cs_file} 의 WhitespaceAround 모듈에 <property name=\"${prop}\" value=\"true\"/> 추가 (spotless/gjf 호환)"
                 diff_count=$((diff_count+1))
               fi
             done
@@ -1084,6 +1125,7 @@ _show_module_status() {
         fi
       else
         echo -e "      ${RED}checkstyle.xml${NC}: 없음 (기대: 있음)"
+        fix "'teamace init' 재실행 — ${dir}/config/checkstyle/checkstyle.xml 생성"
         diff_count=$((diff_count+1))
       fi
 
@@ -1091,10 +1133,12 @@ _show_module_status() {
       if [ -n "$build_file" ]; then
         if ! grep -q "checkstyle" "$build_file" 2>/dev/null; then
           echo -e "      ${RED}빌드 플러그인 checkstyle${NC}: 없음 (기대: 있음 — 빌드 시 스타일 검사)"
+          fix "${build_file} 에 checkstyle 플러그인 추가 — 'teamace init' 재실행"
           diff_count=$((diff_count+1))
         fi
         if ! grep -q "spotless" "$build_file" 2>/dev/null; then
           echo -e "      ${RED}빌드 플러그인 spotless${NC}: 없음 (기대: 있음 — 빌드 시 포맷 검사)"
+          fix "${build_file} 에 spotless 플러그인 추가 — 'teamace init' 재실행"
           diff_count=$((diff_count+1))
         fi
       fi
@@ -1103,23 +1147,43 @@ _show_module_status() {
       if [ -n "$build_file" ]; then
         if grep -qiE "ignoreFailures\s*=\s*true" "$build_file" 2>/dev/null; then
           echo -e "      ${RED}checkstyle ignoreFailures${NC}: true (기대: 제거 — 위반 시 빌드 실패)"
+          fix "${build_file} 에서 'ignoreFailures = true' 줄 삭제 (기본값 false 로 빌드 실패 처리)"
           diff_count=$((diff_count+1))
         fi
         if grep -qiE "enforceCheck\s*=\s*false" "$build_file" 2>/dev/null; then
           echo -e "      ${RED}spotless enforceCheck${NC}: false (기대: 제거 — 빌드 시 포맷 검사)"
+          fix "${build_file} 에서 'enforceCheck = false' 줄 삭제"
           diff_count=$((diff_count+1))
         fi
         if grep -qiE "failOnViolation.*false" "$build_file" 2>/dev/null; then
           echo -e "      ${RED}checkstyle failOnViolation${NC}: false (기대: 제거 — 위반 시 빌드 실패)"
+          fix "${build_file} 에서 'failOnViolation = false' 줄 삭제"
           diff_count=$((diff_count+1))
         fi
       fi
 
       # Git hooks
-      [ ! -d "$dir/.githooks" ] && echo -e "      ${RED}.githooks/${NC}: 없음 (기대: 있음)" && diff_count=$((diff_count+1))
-      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/pre-commit" ] && echo -e "      ${YELLOW}.githooks/pre-commit${NC}: 없음 (기대: config guard + checkstyle + spotless)" && diff_count=$((diff_count+1))
-      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/commit-msg" ] && echo -e "      ${YELLOW}.githooks/commit-msg${NC}: 없음 (기대: conventional commits)" && diff_count=$((diff_count+1))
-      [ -d "$dir/.githooks" ] && [ ! -f "$dir/.githooks/pre-push" ] && echo -e "      ${YELLOW}.githooks/pre-push${NC}: 없음 (기대: main 차단)" && diff_count=$((diff_count+1))
+      if [ ! -d "$dir/.githooks" ]; then
+        echo -e "      ${RED}.githooks/${NC}: 없음 (기대: 있음)"
+        fix "'teamace init' 재실행 — .githooks 디렉토리 생성 및 core.hooksPath 설정"
+        diff_count=$((diff_count+1))
+      else
+        if [ ! -f "$dir/.githooks/pre-commit" ]; then
+          echo -e "      ${YELLOW}.githooks/pre-commit${NC}: 없음 (기대: config guard + checkstyle + spotless)"
+          fix "'teamace init' 재실행하여 .githooks/pre-commit 복원"
+          diff_count=$((diff_count+1))
+        fi
+        if [ ! -f "$dir/.githooks/commit-msg" ]; then
+          echo -e "      ${YELLOW}.githooks/commit-msg${NC}: 없음 (기대: conventional commits)"
+          fix "'teamace init' 재실행하여 .githooks/commit-msg 복원"
+          diff_count=$((diff_count+1))
+        fi
+        if [ ! -f "$dir/.githooks/pre-push" ]; then
+          echo -e "      ${YELLOW}.githooks/pre-push${NC}: 없음 (기대: main 차단)"
+          fix "'teamace init' 재실행하여 .githooks/pre-push 복원"
+          diff_count=$((diff_count+1))
+        fi
+      fi
 
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
       ;;
@@ -1380,6 +1444,7 @@ cmd_status() {
     echo -e "  글로벌 지침:   ${GREEN}적용됨${NC}"
   else
     echo -e "  글로벌 지침:   ${RED}미적용${NC}"
+    fix "install.sh 재실행 — ~/.claude/CLAUDE.md 에 TEAMACE 섹션 삽입"
   fi
 
   # Agent Team
@@ -1387,6 +1452,7 @@ cmd_status() {
     echo -e "  Agent Team:    ${GREEN}활성화${NC}"
   else
     echo -e "  Agent Team:    ${RED}비활성${NC} (install.sh 재실행 필요)"
+    fix "install.sh 재실행 — ~/.claude/settings.json 의 env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=\"1\" 설정"
   fi
 
   # Current project check
@@ -1397,7 +1463,8 @@ cmd_status() {
   if [ -f "CLAUDE.md" ]; then
     echo -e "  CLAUDE.md:     ${GREEN}있음${NC}"
   else
-    echo -e "  CLAUDE.md:     ${YELLOW}없음 (teamace init 실행 필요)${NC}"
+    echo -e "  CLAUDE.md:     ${YELLOW}없음${NC}"
+    fix "'teamace init' 실행하여 프로젝트 CLAUDE.md 생성"
   fi
 
   # Knowledge
@@ -1406,13 +1473,15 @@ cmd_status() {
     knowledge_count=$(ls .claude/teamace/knowledge/*.md 2>/dev/null | wc -l | tr -d ' ')
     echo -e "  Knowledge:     ${GREEN}${knowledge_count}개${NC} (.claude/teamace/knowledge/)"
   else
-    echo -e "  Knowledge:     ${YELLOW}없음 (teamace init 실행 필요)${NC}"
+    echo -e "  Knowledge:     ${YELLOW}없음${NC}"
+    fix "'teamace init' 실행하여 .claude/teamace/knowledge/ 템플릿 생성"
   fi
 
   if check_impeccable "$(pwd)"; then
     echo -e "  Impeccable:    ${GREEN}설치됨${NC}"
   else
     echo -e "  Impeccable:    ${YELLOW}미설치${NC}"
+    fix "npx -y skills add pbakaus/impeccable --agent claude-code --global --yes"
   fi
 
   # Detect project structure

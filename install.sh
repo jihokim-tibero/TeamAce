@@ -105,6 +105,8 @@ echo "$VERSION" > "$TEAMACE_DIR/version"
 info "Impeccable 디자인 스킬 글로벌 설치 중..."
 
 IMPECCABLE_INSTALLED=0
+[ -d "$HOME/.claude/skills/impeccable" ] && IMPECCABLE_INSTALLED=1
+ls "$HOME"/.claude/skills/*impeccable* &>/dev/null 2>&1 && IMPECCABLE_INSTALLED=1
 ls "$HOME"/.agents/skills/*impeccable* &>/dev/null 2>&1 && IMPECCABLE_INSTALLED=1
 [ -d "$HOME/.agents/skills/frontend-design" ] && IMPECCABLE_INSTALLED=1
 ls "$HOME"/.claude/commands/*impeccable* &>/dev/null 2>&1 && IMPECCABLE_INSTALLED=1
