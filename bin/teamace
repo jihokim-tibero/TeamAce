@@ -1164,7 +1164,8 @@ _show_module_status() {
         fi
       fi
 
-      # ESLint 규칙
+      # ESLint 규칙 — flat config를 dynamic import해서 main scope rules 추출
+      # (files 키 있는 객체는 overrides로 제외 → false positive 회피)
       local eslint_cfg=""
       for f in "$dir"/eslint.config.{js,mjs,cjs,ts}; do
         [ -f "$f" ] && eslint_cfg="$f" && break
@@ -1172,24 +1173,81 @@ _show_module_status() {
       if [ -n "$eslint_cfg" ]; then
         local -A eslint_expect=(
           ["no-console"]="error"
-          ["no-explicit-any"]="error"
-          ["no-unused-vars"]="error"
+          ["@typescript-eslint/no-explicit-any"]="error"
+          ["@typescript-eslint/no-unused-vars"]="error"
           ["camelcase"]="error"
           ["max-lines"]="warn"
           ["max-lines-per-function"]="warn"
         )
-        for rule in "${!eslint_expect[@]}"; do
-          local exp="${eslint_expect[$rule]}"
-          if ! grep -q "$rule" "$eslint_cfg" 2>/dev/null; then
-            echo -e "      ${RED}eslint ${rule}${NC}: 없음 (기대: ${exp})"
-            fix "${eslint_cfg} 의 rules 에 '${rule}': '${exp}' 추가"
-            diff_count=$((diff_count+1))
-          elif grep -qE "['\"]${rule}['\"].*['\"]off['\"]|['\"]${rule}['\"].*:\s*0" "$eslint_cfg" 2>/dev/null; then
-            echo -e "      ${RED}eslint ${rule}${NC}: off (기대: ${exp})"
-            fix "${eslint_cfg} 의 rules 에서 '${rule}' 값을 '${exp}' 로 변경"
-            diff_count=$((diff_count+1))
-          fi
+
+        # node_modules 보유 디렉터리 탐색 (모듈 자체 또는 워크스페이스 상위)
+        local node_root="" probe="$dir"
+        while [ -n "$probe" ] && [ "$probe" != "/" ]; do
+          if [ -d "$probe/node_modules" ]; then node_root="$probe"; break; fi
+          probe=$(dirname "$probe")
         done
+
+        local rules_json=""
+        if [ -n "$node_root" ]; then
+          rules_json=$(cd "$dir" && timeout 15 node --input-type=module -e "
+            const path = await import('node:path');
+            const url = await import('node:url');
+            const cfgPath = path.resolve(process.cwd(), '${eslint_cfg##*/}');
+            const m = await import(url.pathToFileURL(cfgPath).href);
+            const cfg = (m.default || m).flat(Infinity);
+            const rules = cfg.filter(o => o && typeof o === 'object' && !o.files).reduce((a, o) => ({...a, ...(o.rules || {})}), {});
+            process.stdout.write(JSON.stringify(rules));
+          " 2>/dev/null)
+        fi
+
+        if [ -n "$rules_json" ]; then
+          # 정확 모드: print-config 결과로 main scope 룰 평가
+          local rule_diffs
+          rule_diffs=$(echo "$rules_json" | node -e "
+            let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+              const rules=JSON.parse(s);
+              const expect=$(printf '%s' '{"no-console":"error","@typescript-eslint/no-explicit-any":"error","@typescript-eslint/no-unused-vars":"error","camelcase":"error","max-lines":"warn","max-lines-per-function":"warn"}');
+              const lvl=v=>{const x=Array.isArray(v)?v[0]:v;if(typeof x==='number')return['off','warn','error'][x]||String(x);return x;};
+              for(const[r,e]of Object.entries(expect)){
+                const v=rules[r];
+                if(v===undefined||v===null){console.log(r+'|missing|'+e);continue;}
+                const cur=lvl(v);
+                if(cur===e)continue;
+                if(cur==='off')console.log(r+'|off|'+e);
+                else if(cur==='warn'&&e==='error')console.log(r+'|warn|'+e);
+              }
+            });
+          " 2>/dev/null)
+          if [ -n "$rule_diffs" ]; then
+            while IFS='|' read -r r cur exp; do
+              [ -z "$r" ] && continue
+              if [ "$cur" = "missing" ]; then
+                echo -e "      ${RED}eslint ${r}${NC}: 없음 (기대: ${exp})"
+                fix "${eslint_cfg} 의 rules 에 '${r}': '${exp}' 추가 (또는 적절한 extends 추가)"
+              else
+                echo -e "      ${RED}eslint ${r}${NC}: ${cur} (기대: ${exp})"
+                fix "${eslint_cfg} 의 main scope rules 에서 '${r}' 값을 '${exp}' 로 변경"
+              fi
+              diff_count=$((diff_count+1))
+            done <<< "$rule_diffs"
+          fi
+        else
+          # Fallback: eslint binary 또는 target 파일 부재 시 grep 기반 (overrides 구분 못 함 — false positive 가능)
+          for rule in "${!eslint_expect[@]}"; do
+            local exp="${eslint_expect[$rule]}"
+            local rule_local="${rule##*/}"
+            if ! grep -q "$rule_local" "$eslint_cfg" 2>/dev/null; then
+              echo -e "      ${RED}eslint ${rule_local}${NC}: 없음 (기대: ${exp})"
+              fix "${eslint_cfg} 의 rules 에 '${rule}': '${exp}' 추가"
+              diff_count=$((diff_count+1))
+            elif grep -qE "['\"]${rule_local}['\"].*['\"]off['\"]|['\"]${rule_local}['\"].*:\s*0" "$eslint_cfg" 2>/dev/null; then
+              echo -e "      ${YELLOW}eslint ${rule_local}${NC}: off (overrides 가능성 — npm install 후 재확인)"
+              fix "node_modules 설치 후 'teamace status' 재실행 — 정확한 main scope 검증 가능"
+              diff_count=$((diff_count+1))
+            fi
+          done
+        fi
+
         # ignores
         if ! grep -q "dist" "$eslint_cfg" 2>/dev/null; then
           echo -e "      ${YELLOW}eslint ignores${NC}: dist/** 없음 (기대: 포함)"
@@ -1208,6 +1266,10 @@ _show_module_status() {
       if [ ! -f "$dir/.husky/pre-commit" ]; then
         echo -e "      ${YELLOW}.husky/pre-commit${NC}: 없음 (기대: config guard + eslint + tsc)"
         fix "'teamace init' 재실행하여 Husky pre-commit 훅 복원"
+        diff_count=$((diff_count+1))
+      elif [ -n "$eslint_cfg" ] && ! grep -qE 'npx[[:space:]]+eslint|node_modules/\.bin/eslint' "$dir/.husky/pre-commit" 2>/dev/null; then
+        echo -e "      ${RED}.husky/pre-commit${NC}: ESLint 호출 라인 없음 (기대: pre-commit이 npx eslint를 실행)"
+        fix "'teamace init' 재실행 또는 .husky/pre-commit 에 'npx eslint . --max-warnings 0' 추가"
         diff_count=$((diff_count+1))
       fi
       if [ ! -f "$dir/.husky/commit-msg" ]; then
@@ -1266,6 +1328,18 @@ _show_module_status() {
       # 기대 설정 비교
       local diff_count=0
       echo -e "    ${BOLD}── 설정 비교 ──${NC}"
+
+      # 도구 자체 부재 — 명시적 불일치로 카운트
+      if [ "$has_ruff" -eq 0 ]; then
+        echo -e "      ${RED}ruff 설정${NC}: 없음 (기대: pyproject.toml [tool.ruff] 또는 ruff.toml)"
+        fix "'teamace init' 재실행 또는 ${dir}/pyproject.toml 에 [tool.ruff] / [tool.ruff.lint] 섹션 추가"
+        diff_count=$((diff_count+1))
+      fi
+      if [ "$has_mypy" -eq 0 ]; then
+        echo -e "      ${RED}mypy 설정${NC}: 없음 (기대: pyproject.toml [tool.mypy] 또는 mypy.ini)"
+        fix "'teamace init' 재실행 또는 ${dir}/pyproject.toml 에 [tool.mypy] (strict = true) 섹션 추가"
+        diff_count=$((diff_count+1))
+      fi
 
       # ruff 설정
       local ruff_cfg=""
@@ -1483,6 +1557,41 @@ _show_module_status() {
       fi
 
       if [ "$diff_count" -eq 0 ]; then echo -e "      ${GREEN}모든 항목 일치${NC}"; fi
+      ;;
+  esac
+}
+
+# ── CI 게이트 점검 — TEAMACE-LINT 마커 / GitHub workflow 존재 ──
+show_ci_gate_status() {
+  local d="$1" lbl="${2:-}"
+  local plat
+  plat=$(detect_platform "$d")
+  local prefix="  "
+  [ -n "$lbl" ] && prefix="    ${CYAN}→${NC} ${lbl}: "
+  case "$plat" in
+    gitlab)
+      if [ -f "$d/.gitlab-ci.yml" ]; then
+        if grep -q "TEAMACE-LINT-START" "$d/.gitlab-ci.yml" 2>/dev/null; then
+          echo -e "${prefix}GitLab CI:     ${GREEN}TeamAce 잡 주입됨${NC}"
+        else
+          echo -e "${prefix}GitLab CI:     ${YELLOW}TeamAce 잡 미주입${NC}"
+          fix "'teamace init' 재실행하여 .gitlab-ci.yml 에 TEAMACE-LINT 블록 추가"
+        fi
+      else
+        echo -e "${prefix}GitLab CI:     ${YELLOW}.gitlab-ci.yml 없음${NC}"
+        fix "'teamace init' 재실행하여 .gitlab-ci.yml 생성"
+      fi
+      ;;
+    github)
+      if [ -f "$d/.github/workflows/teamace-lint.yml" ]; then
+        echo -e "${prefix}GitHub Actions: ${GREEN}teamace-lint.yml 있음${NC}"
+      else
+        echo -e "${prefix}GitHub Actions: ${YELLOW}teamace-lint.yml 없음${NC}"
+        fix "'teamace init' 재실행하여 .github/workflows/teamace-lint.yml 생성"
+      fi
+      ;;
+    *)
+      echo -e "${prefix}CI:            ${YELLOW}플랫폼 미지원 (${plat})${NC}"
       ;;
   esac
 }
@@ -1839,6 +1948,26 @@ cmd_status() {
       done
     else
       info "  지원 스택 없음 (node/python/java)"
+    fi
+  fi
+
+  # CI 게이트
+  echo ""
+  echo -e "${BOLD}CI 게이트${NC}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  if [ -d ".git" ]; then
+    show_ci_gate_status "$current_dir"
+  else
+    local -a ci_repos=()
+    for d in ./*/; do
+      [ -d "${d}.git" ] && ci_repos+=("$(basename "$d")")
+    done
+    if [ ${#ci_repos[@]} -gt 0 ]; then
+      for repo in "${ci_repos[@]}"; do
+        show_ci_gate_status "$current_dir/$repo" "$repo"
+      done
+    else
+      echo -e "  ${YELLOW}Git 저장소 없음 — CI 점검 생략${NC}"
     fi
   fi
   echo ""
