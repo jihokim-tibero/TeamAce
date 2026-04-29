@@ -886,8 +886,9 @@ teamace:lint:${id}:
     - npx eslint . --max-warnings 0
     - if [ -f tsconfig.json ]; then npx tsc --noEmit; fi
   rules:
-    - changes:
-        - ${rel}/**/*
+    - if: \$CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - when: never
 
 EOF
       ;;
@@ -904,8 +905,9 @@ teamace:lint:${id}:
     - ruff format --check .
     - mypy .
   rules:
-    - changes:
-        - ${rel}/**/*
+    - if: \$CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - when: never
 
 EOF
       ;;
@@ -1063,12 +1065,10 @@ setup_ci_github() {
 
   mkdir -p "$wf_dir"
   {
-    echo "# TeamAce auto-generated lint workflow"
+    echo "# TeamAce auto-generated lint workflow (manual trigger only)"
     echo "name: TeamAce Lint"
     echo "on:"
-    echo "  pull_request:"
-    echo "  push:"
-    echo "    branches: [main, master]"
+    echo "  workflow_dispatch:"
     echo "jobs:"
     printf '%s\n' "$jobs"
   } > "$wf_file"
