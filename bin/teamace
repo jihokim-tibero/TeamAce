@@ -187,12 +187,28 @@ import tseslint from "typescript-eslint";
 import globals from "globals";
 
 export default [
-  { ignores: ["dist/**", "build/**", "node_modules/**"] },
+  {
+    ignores: [
+      "dist/**",
+      "build/**",
+      "node_modules/**",
+      "coverage/**",
+      ".next/**",
+      "out/**",
+      "**/target/**",
+      "**/*.tauri-codegen-assets/**",
+    ],
+  },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.strictTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
   {
     languageOptions: {
       globals: { ...globals.browser, ...globals.es2021 },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
     rules: {
       "no-console": "error",
@@ -207,9 +223,46 @@ export default [
     },
   },
   {
+    files: ["**/*.{js,jsx,mjs,cjs}"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
     files: ["vite.config.*", "*.config.{js,ts,mjs,cjs}"],
     languageOptions: {
       globals: { ...globals.node },
+    },
+  },
+  {
+    files: ["scripts/**/*.{js,jsx,ts,tsx,mjs,cjs}"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
+    files: [
+      "**/*.{test,spec}.{js,jsx,ts,tsx}",
+      "tests/**/*.{js,jsx,ts,tsx,mjs,cjs}",
+      "**/__tests__/**/*.{js,jsx,ts,tsx}",
+    ],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.mocha, ...globals.jest },
+    },
+  },
+  {
+    files: ["**/e2e/**/*.{js,jsx,ts,tsx,mjs,cjs}"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.mocha,
+        browser: "readonly",
+        $: "readonly",
+        $$: "readonly",
+        driver: "readonly",
+        expect: "readonly",
+      },
     },
   },
 ];
@@ -258,8 +311,10 @@ if [ -f tsconfig.json ]; then
   fi
 fi
 
+has_eslint_cfg=0
 for cfg in eslint.config.*; do
   [ -f "$cfg" ] || continue
+  has_eslint_cfg=1
   if ! grep -q "no-console" "$cfg" 2>/dev/null; then
     echo "[Config Guard] ESLint: no-console 규칙이 제거되었습니다."
     failed=1
@@ -270,6 +325,19 @@ for cfg in eslint.config.*; do
   fi
   break
 done
+if [ "$has_eslint_cfg" -eq 0 ]; then
+  for legacy in .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.mjs .eslintrc.json .eslintrc.yml .eslintrc.yaml; do
+    [ -f "$legacy" ] && has_eslint_cfg=1 && break
+  done
+fi
+
+# pre-commit 본체가 ESLint를 실제 호출하는지 검증 (회귀 차단)
+if [ "$has_eslint_cfg" -eq 1 ] && [ -f .husky/pre-commit ]; then
+  if ! grep -qE 'npx[[:space:]]+eslint|node_modules/\.bin/eslint' .husky/pre-commit 2>/dev/null; then
+    echo "[Config Guard] husky pre-commit: ESLint 실행 라인이 제거되었습니다."
+    failed=1
+  fi
+fi
 
 [ "$failed" -eq 1 ] && exit 1
 
@@ -787,6 +855,235 @@ setup_toolchain() {
     echo ""
     _setup_precommit_root "$git_root"
   fi
+}
+
+# ─────────────────────────────────────────────
+# CI 잡 자동 주입 (GitLab / GitHub)
+# ─────────────────────────────────────────────
+
+# 모듈명 → 안전한 잡 ID로 변환
+_ci_job_id() {
+  local rel="$1"
+  rel="${rel//\//-}"
+  rel="${rel//./-}"
+  echo "$rel"
+}
+
+# GitLab lint 잡 단일 블록 출력 ($1=relpath, $2=stack)
+_emit_gitlab_job() {
+  local rel="$1" stack="$2"
+  local id
+  id=$(_ci_job_id "$rel")
+  case "$stack" in
+    node)
+      cat <<EOF
+teamace:lint:${id}:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - cd ${rel}
+    - npm ci --no-audit --no-fund
+    - npx eslint . --max-warnings 0
+    - if [ -f tsconfig.json ]; then npx tsc --noEmit; fi
+  rules:
+    - changes:
+        - ${rel}/**/*
+
+EOF
+      ;;
+    python)
+      cat <<EOF
+teamace:lint:${id}:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - pip install --quiet ruff mypy
+  script:
+    - cd ${rel}
+    - ruff check .
+    - ruff format --check .
+    - mypy .
+  rules:
+    - changes:
+        - ${rel}/**/*
+
+EOF
+      ;;
+  esac
+}
+
+# GitHub Actions lint 잡 단일 블록 출력 ($1=relpath, $2=stack)
+_emit_github_job() {
+  local rel="$1" stack="$2"
+  local id
+  id=$(_ci_job_id "$rel")
+  case "$stack" in
+    node)
+      cat <<EOF
+  teamace-lint-${id}:
+    name: Lint ${rel}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${rel}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --no-audit --no-fund
+      - run: npx eslint . --max-warnings 0
+      - run: if [ -f tsconfig.json ]; then npx tsc --noEmit; fi
+
+EOF
+      ;;
+    python)
+      cat <<EOF
+  teamace-lint-${id}:
+    name: Lint ${rel}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${rel}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ruff mypy
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy .
+
+EOF
+      ;;
+  esac
+}
+
+# 모듈 목록 + 루트 처리 — 공통 디스패치
+# 사용: _render_lint_jobs <dir> <emit_fn>
+_render_lint_jobs() {
+  local dir="$1" emit_fn="$2"
+  local out=""
+  local -a mods=()
+
+  while IFS= read -r m; do
+    [ -n "$m" ] && mods+=("$m")
+  done < <(find_modules "$dir")
+
+  local part
+  if [ ${#mods[@]} -gt 0 ]; then
+    for m in "${mods[@]}"; do
+      local rel="${m#$dir/}"
+      local s
+      s=$(detect_stack "$m")
+      case "$s" in
+        node|python)
+          part=$("$emit_fn" "$rel" "$s")
+          [ -n "$part" ] && out+="${part}"$'\n\n'
+          ;;
+      esac
+    done
+  else
+    local s
+    s=$(detect_stack "$dir")
+    case "$s" in
+      node|python)
+        part=$("$emit_fn" "." "$s")
+        [ -n "$part" ] && out+="${part}"$'\n\n'
+        ;;
+    esac
+  fi
+
+  printf '%s' "$out"
+}
+
+# GitLab CI 자동 주입
+setup_ci_gitlab() {
+  local dir="$1"
+  local ci_file="$dir/.gitlab-ci.yml"
+
+  local jobs
+  jobs=$(_render_lint_jobs "$dir" _emit_gitlab_job)
+  if [ -z "$jobs" ]; then
+    info "    → GitLab CI: lint 대상 모듈 없음 (건너뜀)"
+    return 0
+  fi
+
+  if [ ! -f "$ci_file" ]; then
+    {
+      echo "# === TeamAce auto-generated GitLab CI ==="
+      echo "stages:"
+      echo "  - lint"
+      echo ""
+      echo "# TEAMACE-LINT-START"
+      printf '%s\n' "$jobs"
+      echo "# TEAMACE-LINT-END"
+    } > "$ci_file"
+    ok "    → GitLab CI: .gitlab-ci.yml 생성 완료"
+    return 0
+  fi
+
+  if grep -q "TEAMACE-LINT-START" "$ci_file" 2>/dev/null; then
+    ok "    → GitLab CI: TeamAce lint 블록 이미 존재 (건너뜀)"
+    return 0
+  fi
+
+  # stages에 lint 누락 시 경고
+  if ! grep -qE '^[[:space:]]*-[[:space:]]*lint[[:space:]]*$' "$ci_file" 2>/dev/null; then
+    warn "    → GitLab CI: 기존 stages에 'lint'가 없습니다. 추가가 필요합니다."
+  fi
+
+  {
+    echo ""
+    echo "# TEAMACE-LINT-START — 마커를 제거하면 다음 init에서 다시 추가됩니다"
+    printf '%s\n' "$jobs"
+    echo "# TEAMACE-LINT-END"
+  } >> "$ci_file"
+  ok "    → GitLab CI: 기존 .gitlab-ci.yml에 lint 잡 append"
+}
+
+# GitHub Actions 자동 주입
+setup_ci_github() {
+  local dir="$1"
+  local wf_dir="$dir/.github/workflows"
+  local wf_file="$wf_dir/teamace-lint.yml"
+
+  if [ -f "$wf_file" ]; then
+    ok "    → GitHub Actions: teamace-lint.yml 이미 존재 (건너뜀)"
+    return 0
+  fi
+
+  local jobs
+  jobs=$(_render_lint_jobs "$dir" _emit_github_job)
+  if [ -z "$jobs" ]; then
+    info "    → GitHub Actions: lint 대상 모듈 없음 (건너뜀)"
+    return 0
+  fi
+
+  mkdir -p "$wf_dir"
+  {
+    echo "# TeamAce auto-generated lint workflow"
+    echo "name: TeamAce Lint"
+    echo "on:"
+    echo "  pull_request:"
+    echo "  push:"
+    echo "    branches: [main, master]"
+    echo "jobs:"
+    printf '%s\n' "$jobs"
+  } > "$wf_file"
+  ok "    → GitHub Actions: .github/workflows/teamace-lint.yml 생성 완료"
+}
+
+# 디스패처 — 플랫폼별 호출
+setup_ci() {
+  local dir="$1" platform="$2" label="${3:-}"
+  [ -n "$label" ] && info "  ${label} (${platform})" || info "  플랫폼: ${platform}"
+  case "$platform" in
+    gitlab) setup_ci_gitlab "$dir" ;;
+    github) setup_ci_github "$dir" ;;
+    *)      info "    → CI: 미지원 플랫폼 (${platform}) 건너뜀" ;;
+  esac
 }
 
 # 단일 모듈 상태 표시 (내부용)
@@ -1327,7 +1624,21 @@ cmd_init() {
     setup_toolchain "$project_dir"
   fi
 
-  # 5. Create project-level CLAUDE.md if not exists
+  # 5. CI 잡 자동 주입 (GitLab / GitHub)
+  echo ""
+  info "CI 잡 설정 중..."
+
+  if [ "$project_type" = "multi" ]; then
+    for repo in "${sub_repos[@]}"; do
+      local rp
+      rp=$(detect_platform "$project_dir/$repo")
+      setup_ci "$project_dir/$repo" "$rp" "$repo"
+    done
+  elif [ "$project_type" = "single" ]; then
+    setup_ci "$project_dir" "$platforms"
+  fi
+
+  # 6. Create project-level CLAUDE.md if not exists
   local project_claude="$project_dir/CLAUDE.md"
   if [ ! -f "$project_claude" ]; then
     info "프로젝트 CLAUDE.md 생성 중..."
